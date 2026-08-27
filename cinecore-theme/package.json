@@ -1,0 +1,25 @@
+{
+  "name": "cinecore-theme",
+  "version": "1.0.0",
+  "description": "CineCore Theme - Modern dark-themed WordPress theme for Nexcine ecosystem",
+  "private": true,
+  "scripts": {
+    "dev": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --watch",
+    "build": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --minify",
+    "build:css": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --minify"
+  },
+  "keywords": [
+    "wordpress",
+    "theme",
+    "tailwindcss",
+    "dark-mode",
+    "movies"
+  ],
+  "author": "Nexcine",
+  "license": "GPL-2.0-or-later",
+  "devDependencies": {
+    "tailwindcss": "^3.4.1",
+    "postcss": "^8.4.33",
+    "autoprefixer": "^10.4.18"
+  }
+}

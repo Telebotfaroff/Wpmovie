@@ -1,0 +1,22 @@
+/*
+Theme Name: CineCore Theme
+Theme URI: https://nexcine.com/
+Author: Nexcine
+Author URI: https://nexcine.com/
+Description: Modern dark-themed WordPress theme for the Nexcine movie and TV series ecosystem. Built with Tailwind CSS. Supports movies, tv_shows, seasons and episodes CPTs.
+Version: 1.0.0
+License: GPL v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: cinecore
+Tags: dark-mode, movies, tv-shows, tailwind, responsive, entertainment
+Requires at least: 5.9
+Tested up to: 6.5
+Requires PHP: 7.4
+*/
+
+/*
+ * This file is intentionally minimal.
+ * All styling is compiled via Tailwind CSS into assets/css/tailwind.css
+ * See src/input.css for Tailwind entry point.
+ * Run `npm run build` to compile.
+ */
