@@ -152,6 +152,7 @@ function pirate69_process_import_job($job_id) {
 				'chunk_pos' => 0,
 				'item_pos' => 0,
 				'retries' => 0,
+			'preview' => !empty($state['preview']),
 			);
 			$wpdb->update($table, array(
 				'total_items' => $valid_count,
