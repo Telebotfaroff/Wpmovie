@@ -24,10 +24,19 @@ function pirate69_create_import_job($category, $job_type = 'sync') {
 		return new WP_Error('p69_bad_category', 'Unknown catalog category.');
 	}
 	$table = $wpdb->prefix . 'p69_import_jobs';
-	$active = $wpdb->get_var($wpdb->prepare(
-		"SELECT id FROM {$table} WHERE category = %s AND job_type = %s AND status IN ('pending','running','paused') ORDER BY id DESC LIMIT 1",
-		$category, $job_type
-	));
+	$active = 0;
+	if (in_array($job_type,array('chunk','movie'),true)) {
+		$active_rows = $wpdb->get_results($wpdb->prepare("SELECT id,payload FROM {$table} WHERE category=%s AND job_type=%s AND status IN ('pending','running','paused') ORDER BY id DESC", $category, $job_type), ARRAY_A);
+		foreach ((array)$active_rows as $active_row) {
+			$active_state = json_decode($active_row['payload'] ?? '', true);
+			if (is_array($active_state) && (string)($active_state['target'] ?? '') === (string)$target) { $active = (int)$active_row['id']; break; }
+		}
+	} else {
+		$active = $wpdb->get_var($wpdb->prepare(
+			"SELECT id FROM {$table} WHERE category = %s AND job_type = %s AND status IN ('pending','running','paused') ORDER BY id DESC LIMIT 1",
+			$category, $job_type
+		));
+	}
 	if ($active) {
 		return (int) $active;
 	}
@@ -144,6 +153,11 @@ function pirate69_process_import_job($job_id) {
 				$id = sanitize_text_field($row['id']); $chunk_map[$chunk_number][] = $id; $index_rows[$id] = $row; $valid_count++;
 			}
 			ksort($chunk_map, SORT_NUMERIC);
+			if (in_array($job_type,array('chunk','movie'),true) && !$chunk_map) {
+				pirate69_fail_job($job_id, 'The selected chunk or movie ID was not found in the source index.');
+				return;
+			}
+			$job_total = array_sum(array_map('count', $chunk_map));
 			$state = array(
 				'phase' => 'chunks',
 				'chunks' => array_keys($chunk_map),
@@ -155,7 +169,7 @@ function pirate69_process_import_job($job_id) {
 			'preview' => !empty($state['preview']),
 			);
 			$wpdb->update($table, array(
-				'total_items' => $valid_count,
+				'total_items' => $job_total,
 				'payload' => wp_json_encode($state),
 				'updated_at' => current_time('mysql', true),
 			), array('id' => $job_id));

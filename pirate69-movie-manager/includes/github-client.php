@@ -16,3 +16,36 @@ function pirate69_merge_index_metadata($record,$row){
  foreach(array('poster'=>'poster','year'=>'year','quality'=>'quality','isSeries'=>'isSeries','season'=>'season') as $src=>$dst){if((!isset($record[$dst])||''===$record[$dst])&&isset($row[$src]))$record[$dst]=$row[$src];}
  if(empty($record['cleanTitle'])&&!empty($row['title']))$record['cleanTitle']=$row['title'];if(empty($record['fullTitle'])&&!empty($row['title']))$record['fullTitle']=$row['title'];if(!empty($row['isSeries']))$record['isSeries']=true;return $record;
 }
+
+
+/**
+ * Search the lightweight master index. Detailed chunk JSON is only fetched
+ * after an administrator chooses a matching movie or chunk to import.
+ */
+function pirate69_search_catalog($category, $query, $limit = 50) {
+	$categories = pirate69_source_categories();
+	if (!isset($categories[$category])) return new WP_Error('p69_bad_category', 'Unknown catalog category.');
+	$query = trim(sanitize_text_field($query));
+	if ('' === $query) return array();
+	$index = pirate69_fetch_json($categories[$category]['index']);
+	if (is_wp_error($index)) return $index;
+	$needle = function_exists('mb_strtolower') ? mb_strtolower($query) : strtolower($query);
+	$matches = array();
+	foreach ($index as $row) {
+		if (!is_array($row)) continue;
+		$title = (string)($row['title'] ?? $row['id'] ?? '');
+		$id = (string)($row['id'] ?? '');
+		$haystack = function_exists('mb_strtolower') ? mb_strtolower($title . ' ' . $id) : strtolower($title . ' ' . $id);
+		if (false === strpos($haystack, $needle)) continue;
+		$matches[] = array(
+			'id' => sanitize_text_field($id),
+			'title' => sanitize_text_field($title),
+			'chunk' => absint($row['chunk'] ?? 0),
+			'year' => sanitize_text_field($row['year'] ?? ''),
+			'quality' => sanitize_text_field($row['quality'] ?? ''),
+			'isSeries' => !empty($row['isSeries']),
+		);
+		if (count($matches) >= max(1, min(100, absint($limit)))) break;
+	}
+	return $matches;
+}
