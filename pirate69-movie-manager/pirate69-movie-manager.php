@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Pirate69 Movie Manager
  * Description: Movie catalog content types, GitHub JSON imports, download-link storage and scheduled sync for Pirate69.
- * Version: 1.0.0
+ * Version: 2.0.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Pirate69
@@ -10,7 +10,7 @@
  */
 defined('ABSPATH') || exit;
 
-define('P69MM_VERSION', '1.0.0');
+define('P69MM_VERSION', '2.0.0');
 define('P69MM_FILE', __FILE__);
 define('P69MM_DIR', plugin_dir_path(__FILE__));
 
@@ -18,6 +18,7 @@ require_once P69MM_DIR . 'includes/database.php';
 require_once P69MM_DIR . 'includes/post-types.php';
 require_once P69MM_DIR . 'includes/github-client.php';
 require_once P69MM_DIR . 'includes/import-engine.php';
+require_once P69MM_DIR . 'includes/poster-manager.php';
 
 if (is_admin()) {
 	require_once P69MM_DIR . 'admin/importer.php';
