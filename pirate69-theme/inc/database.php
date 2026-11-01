@@ -58,10 +58,28 @@ function pirate69_install_schema() {
 		KEY level_created (level,created_at)
 	) {$charset};";
 
+	$schema_errors = array();
 	foreach ($sql as $statement) {
-		dbDelta($statement);
+		$changes = dbDelta($statement);
+		if (!empty($wpdb->last_error)) {
+			$schema_errors[] = $wpdb->last_error;
+		}
+		// dbDelta can report no changes without creating a missing table on
+		// hosts with unusual MySQL compatibility. Fall back to native CREATE.
+		if (preg_match('/^CREATE TABLE ([^ ]+)/i', $statement, $match)) {
+			$table_name = trim($match[1], "`");
+			$found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table_name)));
+			if ($found !== $table_name) {
+				$create_sql = preg_replace('/^CREATE TABLE /i', 'CREATE TABLE IF NOT EXISTS ', $statement);
+				$result = $wpdb->query($create_sql);
+				if (false === $result && !empty($wpdb->last_error)) {
+					$schema_errors[] = $table_name . ': ' . $wpdb->last_error;
+				}
+			}
+		}
 	}
-	update_option('pirate69_db_version', '1.0.2', false);
+	update_option('pirate69_db_version', '1.0.3', false);
+	update_option('pirate69_schema_errors', $schema_errors, false);
 }
 
 function pirate69_schema_is_ready() {
@@ -79,12 +97,23 @@ function pirate69_schema_is_ready() {
 }
 
 function pirate69_ensure_schema() {
-	if (get_option('pirate69_db_version') !== '1.0.2' || !pirate69_schema_is_ready()) {
+	if (get_option('pirate69_db_version') !== '1.0.3' || !pirate69_schema_is_ready()) {
 		pirate69_install_schema();
 	}
 	if (!pirate69_schema_is_ready()) {
 		global $wpdb;
-		return new WP_Error('p69_schema_missing', 'Pirate69 database tables could not be created. Database error: ' . ($wpdb->last_error ?: 'unknown database error'));
+		$missing = array();
+		foreach (array('p69_download_links', 'p69_import_jobs', 'p69_import_logs') as $suffix) {
+			$table = $wpdb->prefix . $suffix;
+			$found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
+			if ($found !== $table) $missing[] = $table;
+		}
+		$details = get_option('pirate69_schema_errors', array());
+		$detail_text = $details ? implode(' | ', array_map('sanitize_text_field', $details)) : ($wpdb->last_error ?: 'MySQL returned no error; verify that the database user has CREATE and ALTER privileges.');
+		return new WP_Error(
+			'p69_schema_missing',
+			'Pirate69 could not create these database tables: ' . implode(', ', $missing) . '. Details: ' . $detail_text
+		);
 	}
 	return true;
 }
