@@ -71,8 +71,20 @@ function pirate69_process_import_job($job_id) {
 	global $wpdb;
 	$job_id = absint($job_id);
 	$lock_key = 'p69_job_lock_' . $job_id;
-	if (!$job_id || !wp_cache_add($lock_key, 1, 'pirate69', 180)) {
+	if (!$job_id) {
 		return;
+	}
+	// add_option() is an atomic insert on the options table, unlike the
+	// default non-persistent object cache which is isolated per PHP request.
+	$lock_value = (string) time();
+	if (!add_option($lock_key, $lock_value, '', false)) {
+		$existing_lock = (int) get_option($lock_key);
+		if ($existing_lock && (time() - $existing_lock) > 180) {
+			delete_option($lock_key);
+		}
+		if (!add_option($lock_key, $lock_value, '', false)) {
+			return;
+		}
 	}
 	$table = $wpdb->prefix . 'p69_import_jobs';
 	try {
@@ -195,7 +207,7 @@ function pirate69_process_import_job($job_id) {
 		));
 		pirate69_schedule_job($job_id, 5);
 	} finally {
-		wp_cache_delete($lock_key, 'pirate69');
+		delete_option($lock_key);
 	}
 }
 
