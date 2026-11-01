@@ -13,7 +13,7 @@ function pirate69_sanitize_import_settings($input) {
 		'batch_size'=>max(1,min(30,absint($input['batch_size']??10))),
 		'poster_import'=>empty($input['poster_import'])?0:1,
 		'poster_max_mb'=>max(1,min(20,absint($input['poster_max_mb']??8))),
-		'poster_retry_limit'=>max(1,min(10,absint($input['poster_retry_limit']??3)),
+		'poster_retry_limit'=>max(1,min(10,absint($input['poster_retry_limit']??3))),
 	);
 }
 function pirate69_import_settings_menu(){add_submenu_page('pirate69-importer','Importer Settings','Settings','manage_options','pirate69-importer-settings','pirate69_render_import_settings');}

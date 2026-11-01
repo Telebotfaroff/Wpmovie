@@ -379,12 +379,14 @@ function pirate69_import_poster($post_id, $url) {
 	if (!$url || !wp_http_validate_url($url)) {
 		return new WP_Error('p69_bad_poster_url', 'Poster URL is invalid.');
 	}
+	$existing = get_posts(array('post_type'=>'attachment','post_status'=>'inherit','meta_key'=>'_p69_source_poster_url','meta_value'=>$url,'numberposts'=>1,'fields'=>'ids','no_found_rows'=>true));
+	if ($existing) { set_post_thumbnail($post_id,(int)$existing[0]); update_post_meta($post_id,'_p69_poster_attachment_id',(int)$existing[0]); update_post_meta($post_id,'_p69_poster_status','downloaded'); return (int)$existing[0]; }
 	$tmp = download_url($url, 20);
 	if (is_wp_error($tmp)) {
 		return $tmp;
 	}
 	$size = filesize($tmp);
-	if (!$size || $size > 8 * MB_IN_BYTES) {
+	if (!$size || $size > max(1,min(20,absint(pirate69_source_config()['settings']['poster_max_mb'] ?? 8))) * MB_IN_BYTES) {
 		@unlink($tmp);
 		return new WP_Error('p69_poster_size', 'Poster is empty or larger than 8 MB.');
 	}
@@ -404,6 +406,7 @@ function pirate69_import_poster($post_id, $url) {
 		@unlink($tmp);
 		return $attachment_id;
 	}
+	update_post_meta($attachment_id, '_p69_source_poster_url', $url);
 	set_post_thumbnail($post_id, $attachment_id);
 	update_post_meta($post_id, '_p69_poster_attachment_id', (int) $attachment_id);
 	update_post_meta($post_id, '_p69_poster_status', 'downloaded');
