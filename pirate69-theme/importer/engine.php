@@ -76,11 +76,17 @@ function pirate69_process_import_job($job_id) {
 	}
 	// add_option() is an atomic insert on the options table, unlike the
 	// default non-persistent object cache which is isolated per PHP request.
-	$lock_value = (string) time();
+	$lock_value = time() . ':' . wp_generate_password(20, false, false);
 	if (!add_option($lock_key, $lock_value, '', false)) {
-		$existing_lock = (int) get_option($lock_key);
-		if ($existing_lock && (time() - $existing_lock) > 180) {
-			delete_option($lock_key);
+		$existing_lock = (string) get_option($lock_key, '');
+		$lock_time = (int) strtok($existing_lock, ':');
+		if ($lock_time > 0 && (time() - $lock_time) > 300) {
+			// Compare-and-delete: never remove a newer worker's lock.
+			$wpdb->query($wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+				$lock_key,
+				maybe_serialize($existing_lock)
+			));
 		}
 		if (!add_option($lock_key, $lock_value, '', false)) {
 			return;
@@ -186,9 +192,17 @@ function pirate69_process_import_job($job_id) {
 		$errors = 0;
 		foreach ($batch as $record) {
 			$result = pirate69_import_record($record, $category);
+			$attempt = 1;
+			while (is_wp_error($result) && $attempt < 3) {
+				$attempt++;
+				$result = pirate69_import_record($record, $category);
+			}
 			if (is_wp_error($result)) {
 				$errors++;
-				pirate69_log($job_id, 'error', $result->get_error_message(), array('source_id' => $record['id'] ?? ''));
+				pirate69_log($job_id, 'error', $result->get_error_message(), array(
+					'source_id' => $record['id'] ?? '',
+					'attempts' => $attempt,
+				));
 			}
 			$processed++;
 		}
@@ -207,7 +221,12 @@ function pirate69_process_import_job($job_id) {
 		));
 		pirate69_schedule_job($job_id, 5);
 	} finally {
-		delete_option($lock_key);
+		// Release only the lock owned by this worker.
+		$wpdb->query($wpdb->prepare(
+			"DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+			$lock_key,
+			maybe_serialize($lock_value)
+		));
 	}
 }
 
