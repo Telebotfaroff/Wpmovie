@@ -36,7 +36,6 @@ function pirate69_create_import_job($category, $job_type = 'sync') {
 		'job_type' => $job_type,
 		'category' => $category,
 		'status' => 'pending',
-		'cursor' => '',
 		'total_items' => 0,
 		'processed_items' => 0,
 		'error_count' => 0,
