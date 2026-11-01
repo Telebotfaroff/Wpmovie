@@ -1,4 +1,4 @@
-name: Build Pirate69 WordPress Theme
+name: Build Pirate69 WordPress Packages
 
 on:
   workflow_dispatch:
@@ -7,40 +7,48 @@ on:
       - main
     paths:
       - "pirate69-theme/**"
+      - "pirate69-movie-manager/**"
       - ".github/workflows/build-theme.yml"
 
 permissions:
   contents: read
 
 jobs:
-  package-theme:
-    name: Build installable WordPress theme
+  package:
+    name: Validate and package theme + plugin
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate theme structure
+      - name: Validate theme
         run: |
-          test -f pirate69-theme/style.css || {
-            echo "::error::pirate69-theme/style.css is missing"
-            exit 1
-          }
-          grep -q "Theme Name:" pirate69-theme/style.css || {
-            echo "::error::style.css does not contain a WordPress Theme Name header"
-            exit 1
-          }
+          test -f pirate69-theme/style.css
+          grep -q "Theme Name:" pirate69-theme/style.css
           test -f pirate69-theme/functions.php
           test -f pirate69-theme/index.php
 
-      # upload-artifact creates the downloadable ZIP. By uploading the
-      # contents of pirate69-theme (rather than the parent folder), style.css
-      # is placed at the ZIP root, exactly where WordPress expects it.
-      - name: Upload installable theme ZIP
+      - name: Validate plugin
+        run: |
+          test -f pirate69-movie-manager/pirate69-movie-manager.php
+          grep -q "Plugin Name: Pirate69 Movie Manager" pirate69-movie-manager/pirate69-movie-manager.php
+
+      # Theme artifact has style.css at ZIP root.
+      - name: Upload installable theme package
         uses: actions/upload-artifact@v4
         with:
           name: pirate69-theme.zip
           path: pirate69-theme/**
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+      # Plugin artifact preserves its top-level plugin directory and main file.
+      - name: Upload installable plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pirate69-movie-manager.zip
+          path: pirate69-movie-manager/**
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 30
