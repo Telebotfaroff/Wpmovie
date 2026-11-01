@@ -1,0 +1,42 @@
+name: Pirate69 PHP checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pirate69-theme/**"
+      - ".github/workflows/php-check.yml"
+  pull_request:
+    paths:
+      - "pirate69-theme/**"
+      - ".github/workflows/php-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["7.4", "8.1", "8.2", "8.3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: none
+      - name: Lint all theme PHP files
+        run: |
+          set -eu
+          find pirate69-theme -type f -name '*.php' -print0 | while IFS= read -r -d '' file; do
+            php -l "$file"
+          done
+      - name: Verify required theme files
+        run: |
+          test -s pirate69-theme/style.css
+          test -s pirate69-theme/functions.php
+          test -s pirate69-theme/index.php
+          grep -q 'Theme Name: Pirate69' pirate69-theme/style.css
