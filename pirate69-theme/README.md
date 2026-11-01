@@ -1,35 +1,37 @@
 # Pirate69 WordPress Theme
 
-Standalone WordPress theme for the Pirate69 movie and TV catalog.
+Presentation theme for the Pirate69 movie and TV catalog.
 
 ## Features
 - Dark cinematic responsive design and hybrid hero/catalog homepage.
-- Movie and TV Series post types.
-- Genre, language, industry and quality taxonomies.
-- Detailed movie and series pages with poster, year, quality, catalog ID, taxonomy terms and source-page link.
+- Responsive movie and series cards and detailed single-title layouts.
 - Download links grouped by quality, with server, size and audio metadata.
-- Download links are read from the theme's custom table; imported and manually added links can coexist.
-- GitHub JSON importer with index/chunk reader, incremental fingerprint checks, resumable batch jobs, retries, poster sideloading and admin controls.
-- No streaming/player functionality and no required companion plugin.
+- Theme customization for accent color, homepage hero and catalog page size.
+- No streaming/player functionality.
 
-## Requirements
-WordPress 6.2+, PHP 8.1+, MySQL 5.7+ or MariaDB 10.4+.
+## Required companion plugin
+Install and activate **Pirate69 Movie Manager** from the `pirate69-movie-manager/` directory in this repository. The plugin owns:
+- Movie and TV Series post types and genre/language/industry/quality taxonomies.
+- GitHub JSON importer, resumable queue, retries, progress and logs.
+- Download-link storage and schema migrations.
+- Daily scheduled sync and importer settings.
+
+Keeping content and importer logic in the plugin means switching or updating the theme will not disable catalog registration or scheduled imports.
 
 ## Install
-Upload the `pirate69-theme` directory as a theme, or zip that directory and upload it through Appearance > Themes > Add New. Activate Pirate69, then open Appearance > Pirate69 Settings and Pirate69 Importer.
+1. Install and activate the Pirate69 Movie Manager plugin.
+2. Zip the `pirate69-theme` directory and upload it under Appearance > Themes > Add New.
+3. Activate Pirate69.
+4. Open Pirate69 Importer to configure the source and queue imports.
 
-Activation creates the versioned tables and schedules daily sync. Theme upgrades do not delete existing content.
+## Requirements
+WordPress 6.2+, PHP 7.4+, MySQL 5.7+ or MariaDB 10.4+.
 
 ## Import source
-Default source is `7xmovies/database` on the `main` branch. Configure owner, repository, branch, timeout, batch size and poster import under the theme settings. Start category imports from Pirate69 Importer.
+Default source is `7xmovies/database` on branch `main`. Configure GitHub owner, repository, branch, timeout, batch size and poster import in Pirate69 Importer > Settings. The importer reads the index/chunk JSON files and processes bounded batches through WP-Cron. On low-traffic sites configure a server cron to request `wp-cron.php` periodically.
 
-The importer processes a bounded batch per WP-Cron invocation. On low-traffic sites, configure a real server cron to request `wp-cron.php` periodically so queued imports progress reliably.
+## Existing installations
+The plugin uses the existing `p69_movie`, `p69_tv_show`, taxonomy names and `{prefix}p69_*` table names. Existing catalog posts, metadata and download-link rows are retained. Activate the plugin before switching themes or running imports. Do not delete the old theme database tables.
 
-## Download links
-The single movie/series template queries enabled rows from `{prefix}p69_download_links`. Links are grouped by quality and display label, server, file size and audio metadata when present. Only enabled links are shown. The importer replaces rows marked `origin=imported` and preserves rows marked `origin=manual`.
-
-## Data behavior
-Movie and series records are registered by the theme. Their database content remains if switching themes, but the post types and theme-specific download tables are intended to be used while Pirate69 is active. Back up the WordPress database and uploads directory before bulk imports.
-
-## Validation status
-Source files are committed to GitHub. A live WordPress/PHP runtime test has not yet been performed; test on a staging WordPress site before running the first full catalog sync.
+## Validation
+Source is committed to GitHub. Run the PHP checks workflow and test activation on staging before bulk import; no live WordPress runtime test has been performed here.
