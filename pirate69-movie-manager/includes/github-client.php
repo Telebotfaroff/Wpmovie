@@ -6,9 +6,11 @@ function pirate69_source_config(){
  return array('settings'=>$s,'base'=>"https://raw.githubusercontent.com/{$owner}/{$repo}/{$branch}/");
 }
 function pirate69_fetch_json($path){
- $c=pirate69_source_config();$url=$c['base'].ltrim($path,'/');$r=wp_safe_remote_get($url,array('timeout'=>max(5,min(60,absint($c['settings']['timeout']))),'redirection'=>3,'headers'=>array('Accept'=>'application/json','User-Agent'=>'Pirate69-WordPress-Importer')));
+ $c=pirate69_source_config();$cache_key='p69_json_'.md5($c['base'].ltrim($path,'/'));
+ $cached=get_transient($cache_key);if(false!==$cached&&is_array($cached))return $cached;
+ $url=$c['base'].ltrim($path,'/');$r=wp_safe_remote_get($url,array('timeout'=>max(5,min(60,absint($c['settings']['timeout']))),'redirection'=>3,'headers'=>array('Accept'=>'application/json','User-Agent'=>'Pirate69-WordPress-Importer')));
  if(is_wp_error($r))return $r;$code=wp_remote_retrieve_response_code($r);if(200!==$code)return new WP_Error('p69_http_error',sprintf('Source returned HTTP %d for %s',$code,esc_url_raw($url)));
- $data=json_decode(wp_remote_retrieve_body($r),true);if(JSON_ERROR_NONE!==json_last_error()||!is_array($data))return new WP_Error('p69_invalid_json','Invalid JSON received from source: '.$path);return $data;
+ $data=json_decode(wp_remote_retrieve_body($r),true);if(JSON_ERROR_NONE!==json_last_error()||!is_array($data))return new WP_Error('p69_invalid_json','Invalid JSON received from source: '.$path);set_transient($cache_key,$data,5*MINUTE_IN_SECONDS);return $data;
 }
 function pirate69_source_categories(){return array('hollywood'=>array('label'=>'Hollywood','index'=>'hollywood-index.json','feed'=>'vegamovieshomepage.json'),'bollywood'=>array('label'=>'Bollywood','index'=>'bollywood-index.json','feed'=>'rogmovieshomepage.json'),'xprimehub'=>array('label'=>'X-Hub','index'=>'xprimehub-index.json','feed'=>'xprimehubhomepage.json'));}
 function pirate69_merge_index_metadata($record,$row){
