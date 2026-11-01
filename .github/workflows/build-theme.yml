@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   package-theme:
-    name: Package installable theme ZIP
+    name: Build installable WordPress theme
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -33,17 +33,14 @@ jobs:
           test -f pirate69-theme/functions.php
           test -f pirate69-theme/index.php
 
-      - name: Create WordPress installable ZIP
-        run: |
-          rm -f pirate69-theme.zip
-          zip -r pirate69-theme.zip pirate69-theme \
-            -x "*/.git/*" "*/.DS_Store" "*/Thumbs.db"
-          unzip -l pirate69-theme.zip | head -40
-
-      - name: Upload theme package
+      # upload-artifact creates the downloadable ZIP. By uploading the
+      # contents of pirate69-theme (rather than the parent folder), style.css
+      # is placed at the ZIP root, exactly where WordPress expects it.
+      - name: Upload installable theme ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: pirate69-wordpress-theme
-          path: pirate69-theme.zip
+          name: pirate69-theme.zip
+          path: pirate69-theme/**
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 30
