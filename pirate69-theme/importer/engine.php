@@ -17,7 +17,10 @@ function pirate69_log($job_id, $level, $message, $context = array()) {
 
 function pirate69_create_import_job($category) {
 	global $wpdb;
-	if (!isset(pirate69_source_categories()[$category])) {
+	$schema = pirate69_ensure_schema();
+	if (is_wp_error($schema)) return $schema;
+	$categories = pirate69_source_categories();
+	if (!isset($categories[$category])) {
 		return new WP_Error('p69_bad_category', 'Unknown catalog category.');
 	}
 	$table = $wpdb->prefix . 'p69_import_jobs';
@@ -29,7 +32,7 @@ function pirate69_create_import_job($category) {
 		return (int) $active;
 	}
 	$now = current_time('mysql', true);
-	$wpdb->insert($table, array(
+	$inserted = $wpdb->insert($table, array(
 		'job_type' => 'sync',
 		'category' => $category,
 		'status' => 'pending',
@@ -47,9 +50,14 @@ function pirate69_create_import_job($category) {
 		'created_at' => $now,
 		'updated_at' => $now,
 	));
+	if (false === $inserted) {
+		$error = $wpdb->last_error ? $wpdb->last_error : 'The database rejected the insert without returning an error.';
+		pirate69_log(0, 'error', 'Import job insert failed.', array('db_error' => $error, 'table' => $table));
+		return new WP_Error('p69_job_create_failed', 'Could not create import job: ' . $error);
+	}
 	$id = (int) $wpdb->insert_id;
 	if (!$id) {
-		return new WP_Error('p69_job_create_failed', 'Could not create import job.');
+		return new WP_Error('p69_job_create_failed', 'The database insert completed but returned no job ID.');
 	}
 	pirate69_log($id, 'info', 'Import job queued.', array('category' => $category));
 	pirate69_schedule_job($id, 5);

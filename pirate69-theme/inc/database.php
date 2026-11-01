@@ -61,13 +61,36 @@ function pirate69_install_schema() {
 	foreach ($sql as $statement) {
 		dbDelta($statement);
 	}
-	update_option('pirate69_db_version', '1.0.1', false);
+	update_option('pirate69_db_version', '1.0.2', false);
+}
+
+function pirate69_schema_is_ready() {
+	global $wpdb;
+	$tables = array(
+		$wpdb->prefix . 'p69_download_links',
+		$wpdb->prefix . 'p69_import_jobs',
+		$wpdb->prefix . 'p69_import_logs',
+	);
+	foreach ($tables as $table) {
+		$found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
+		if ($found !== $table) return false;
+	}
+	return true;
+}
+
+function pirate69_ensure_schema() {
+	if (get_option('pirate69_db_version') !== '1.0.2' || !pirate69_schema_is_ready()) {
+		pirate69_install_schema();
+	}
+	if (!pirate69_schema_is_ready()) {
+		global $wpdb;
+		return new WP_Error('p69_schema_missing', 'Pirate69 database tables could not be created. Database error: ' . ($wpdb->last_error ?: 'unknown database error'));
+	}
+	return true;
 }
 
 function pirate69_maybe_upgrade_schema() {
-	if (get_option('pirate69_db_version') !== '1.0.1') {
-		pirate69_install_schema();
-	}
+	pirate69_ensure_schema();
 }
 add_action('after_switch_theme', 'pirate69_install_schema');
 add_action('admin_init', 'pirate69_maybe_upgrade_schema');
