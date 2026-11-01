@@ -8,9 +8,3 @@ require_once PIRATE69_DIR.'/inc/assets.php';
 require_once PIRATE69_DIR.'/inc/post-types.php';
 require_once PIRATE69_DIR.'/inc/database.php';
 require_once PIRATE69_DIR.'/inc/theme-options.php';
-require_once PIRATE69_DIR . '/importer/github-client.php';
-require_once PIRATE69_DIR . '/importer/engine.php';
-if (is_admin()) {
- require_once PIRATE69_DIR . '/admin/importer.php';
- require_once PIRATE69_DIR . '/admin/settings.php';
-}
