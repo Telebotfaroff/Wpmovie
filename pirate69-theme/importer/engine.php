@@ -16,6 +16,8 @@ function pirate69_create_import_job($category) {
 	$categories = pirate69_source_categories();
 	if (!isset($categories[$category])) return new WP_Error('p69_bad_category', 'Unknown catalog category.');
 	$table = $wpdb->prefix . 'p69_import_jobs';
+	$active = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE category = %s AND status IN ('pending','running','paused') ORDER BY id DESC LIMIT 1", $category));
+	if ($active) return (int) $active;
 	$now = current_time('mysql', true);
 	$wpdb->insert($table, array(
 		'job_type' => 'sync', 'category' => $category, 'status' => 'pending',
@@ -204,3 +206,17 @@ function pirate69_import_poster($post_id, $url) {
 	return $attachment_id;
 }
 add_action('pirate69_process_import_job', 'pirate69_process_import_job');
+
+function pirate69_daily_sync() {
+	foreach (array_keys(pirate69_source_categories()) as $category) {
+		pirate69_create_import_job($category);
+	}
+}
+add_action('pirate69_daily_sync', 'pirate69_daily_sync');
+
+function pirate69_schedule_daily_sync() {
+	if (!wp_next_scheduled('pirate69_daily_sync')) {
+		wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'pirate69_daily_sync');
+	}
+}
+add_action('after_switch_theme', 'pirate69_schedule_daily_sync');
