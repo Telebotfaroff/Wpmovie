@@ -15,6 +15,8 @@ function pirate69_install_schema() {
 	$links = $wpdb->prefix . 'p69_download_links';
 	$jobs  = $wpdb->prefix . 'p69_import_jobs';
 	$logs  = $wpdb->prefix . 'p69_import_logs';
+	$source_map = $wpdb->prefix . 'p69_source_map';
+	$posters = $wpdb->prefix . 'p69_poster_queue';
 
 	$sql = array();
 
@@ -73,6 +75,32 @@ function pirate69_install_schema() {
 		KEY level_created (level,created_at)
 	) {$charset};";
 
+	$sql[] = "CREATE TABLE {$source_map} (
+		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+		category varchar(80) NOT NULL DEFAULT '',
+		source_id varchar(191) NOT NULL DEFAULT '',
+		post_id bigint(20) unsigned NOT NULL,
+		fingerprint char(64) NOT NULL DEFAULT '',
+		updated_at datetime NOT NULL,
+		PRIMARY KEY  (id),
+		UNIQUE KEY source_lookup (category,source_id),
+		KEY post_id (post_id)
+	) {$charset};";
+
+	$sql[] = "CREATE TABLE {$posters} (
+		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+		post_id bigint(20) unsigned NOT NULL,
+		poster_url text NOT NULL,
+		status varchar(20) NOT NULL DEFAULT 'queued',
+		attempts smallint(5) unsigned NOT NULL DEFAULT 0,
+		last_error text NULL,
+		created_at datetime NOT NULL,
+		updated_at datetime NOT NULL,
+		PRIMARY KEY  (id),
+		UNIQUE KEY post_id (post_id),
+		KEY status_updated (status,updated_at)
+	) {$charset};";
+
 	$errors = array();
 	foreach ($sql as $statement) {
 		$wpdb->last_error = '';
@@ -83,7 +111,7 @@ function pirate69_install_schema() {
 	}
 
 	$missing = array();
-	foreach (array($links, $jobs, $logs) as $table) {
+	foreach (array($links, $jobs, $logs, $source_map, $posters) as $table) {
 		$found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
 		if ($found !== $table) {
 			$missing[] = $table;
@@ -111,14 +139,14 @@ function pirate69_install_schema() {
 	$errors = array_values(array_unique(array_filter($errors)));
 	update_option('pirate69_schema_errors', $errors, false);
 	if (!$errors) {
-		update_option('pirate69_db_version', '2.0.1', false);
+		update_option('pirate69_db_version', '2.2.0', false);
 	}
 	return empty($errors);
 }
 
 function pirate69_schema_is_ready() {
 	global $wpdb;
-	foreach (array('p69_download_links', 'p69_import_jobs', 'p69_import_logs') as $suffix) {
+	foreach (array('p69_download_links', 'p69_import_jobs', 'p69_import_logs', 'p69_source_map', 'p69_poster_queue') as $suffix) {
 		$table = $wpdb->prefix . $suffix;
 		$found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
 		if ($found !== $table) {
@@ -130,11 +158,11 @@ function pirate69_schema_is_ready() {
 
 function pirate69_ensure_schema() {
 	$version = get_option('pirate69_db_version');
-	if ($version !== '2.0.1' || !pirate69_schema_is_ready()) {
+	if ($version !== '2.2.0' || !pirate69_schema_is_ready()) {
 		pirate69_install_schema();
 	}
 
-	if (!pirate69_schema_is_ready() || get_option('pirate69_db_version') !== '2.0.1') {
+	if (!pirate69_schema_is_ready() || get_option('pirate69_db_version') !== '2.2.0') {
 		$errors = get_option('pirate69_schema_errors', array());
 		$message = $errors
 			? implode(' | ', array_map('sanitize_text_field', $errors))

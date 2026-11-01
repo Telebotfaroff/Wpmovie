@@ -1,7 +1,7 @@
 <?php
 defined('ABSPATH') || exit;
 function pirate69_source_config(){
- $s=wp_parse_args(get_option('pirate69_import_settings',array()),array('owner'=>'7xmovies','repository'=>'database','branch'=>'main','timeout'=>20,'batch_size'=>10,'poster_import'=>1,'poster_max_mb'=>8,'poster_retry_limit'=>3));
+ $s=wp_parse_args(get_option('pirate69_import_settings',array()),array('owner'=>'7xmovies','repository'=>'database','branch'=>'main','timeout'=>20,'batch_size'=>20,'poster_import'=>1,'poster_max_mb'=>8,'poster_retry_limit'=>3));
  $owner=sanitize_user($s['owner'],true);$repo=preg_replace('/[^A-Za-z0-9_.-]/','',$s['repository']);$branch=rawurlencode($s['branch']);
  return array('settings'=>$s,'base'=>"https://raw.githubusercontent.com/{$owner}/{$repo}/{$branch}/");
 }

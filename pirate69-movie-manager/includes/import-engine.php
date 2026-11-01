@@ -141,7 +141,7 @@ function pirate69_process_import_job($job_id) {
 		if (($state['phase'] ?? '') === 'feed_records') {
 			$records=$state['records']??array();$offset=absint($state['item_pos']??0);$size=max(1,min(30,absint(pirate69_source_config()['settings']['batch_size']??10)));$batch=array_slice($records,$offset,$size);
 			$counts=pirate69_process_record_batch($batch,$category,$job_id,!empty($state['preview']));$offset+=count($batch);$state['item_pos']=$offset;
-			$wpdb->query($wpdb->prepare("UPDATE {$table} SET processed_items=processed_items+%d,created_count=created_count+%d,updated_count=updated_count+%d,skipped_count=skipped_count+%d,error_count=error_count+%d,payload=%s,updated_at=%s WHERE id=%d",count($batch),$counts['created'],$counts['updated'],$counts['skipped'],$counts['errors'],wp_json_encode($state),current_time('mysql',true),$job_id));
+			$wpdb->query($wpdb->prepare("UPDATE {$table} SET processed_items=processed_items+%d,created_count=created_count+%d,updated_count=updated_count+%d,skipped_count=skipped_count+%d,error_count=error_count+%d,payload=%s,updated_at=%s WHERE id=%d",absint($counts['processed']),$counts['created'],$counts['updated'],$counts['skipped'],$counts['errors'],wp_json_encode($state),current_time('mysql',true),$job_id));
 			if($offset>=count($records)){$wpdb->update($table,array('status'=>'completed','updated_at'=>current_time('mysql',true)),array('id'=>$job_id));pirate69_log($job_id,'success','Homepage feed processing completed.',$counts);}else{pirate69_schedule_job($job_id,5);}return;
 		}
 		if (($state['phase'] ?? 'index') === 'index') {
