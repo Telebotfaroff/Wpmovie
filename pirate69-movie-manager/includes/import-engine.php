@@ -15,13 +15,16 @@ function pirate69_log($job_id, $level, $message, $context = array()) {
 	), array('%d', '%s', '%s', '%s', '%s'));
 }
 
-function pirate69_create_import_job($category, $job_type = 'sync') {
+function pirate69_create_import_job($category, $job_type = 'sync', $target = '') {
 	global $wpdb;
 	$schema = pirate69_ensure_schema();
 	if (is_wp_error($schema)) return $schema;
 	$categories = pirate69_source_categories();
-	if (!isset($categories[$category]) || !in_array($job_type,array('sync','preview','homepage'),true)) {
+	if (!isset($categories[$category]) || !in_array($job_type,array('sync','preview','homepage','chunk','movie'),true)) {
 		return new WP_Error('p69_bad_category', 'Unknown catalog category.');
+	}
+	if (in_array($job_type, array('chunk','movie'), true) && '' === (string) $target) {
+		return new WP_Error('p69_missing_target', 'A chunk number or movie source ID is required.');
 	}
 	$table = $wpdb->prefix . 'p69_import_jobs';
 	$active = 0;
@@ -55,6 +58,7 @@ function pirate69_create_import_job($category, $job_type = 'sync') {
 			'item_pos' => 0,
 			'retries' => 0,
 			'preview' => ('preview' === $job_type),
+			'target' => (string) $target,
 		)),
 		'created_at' => $now,
 		'updated_at' => $now,
@@ -153,7 +157,18 @@ function pirate69_process_import_job($job_id) {
 				$id = sanitize_text_field($row['id']); $chunk_map[$chunk_number][] = $id; $index_rows[$id] = $row; $valid_count++;
 			}
 			ksort($chunk_map, SORT_NUMERIC);
-			if (in_array($job_type,array('chunk','movie'),true) && !$chunk_map) {
+			$job_type = sanitize_key($job['job_type'] ?? 'sync');
+			$target = (string) ($state['target'] ?? '');
+			if ('chunk' === $job_type) {
+				$wanted_chunk = absint($target);
+				$chunk_map = isset($chunk_map[$wanted_chunk]) ? array($wanted_chunk => $chunk_map[$wanted_chunk]) : array();
+			} elseif ('movie' === $job_type) {
+				$wanted_row = $index_rows[$target] ?? null;
+				$wanted_chunk = is_array($wanted_row) ? absint($wanted_row['chunk'] ?? 0) : 0;
+				$chunk_map = ($wanted_chunk && isset($chunk_map[$wanted_chunk])) ? array($wanted_chunk => array($target)) : array();
+				$index_rows = isset($index_rows[$target]) ? array($target => $index_rows[$target]) : array();
+			}
+			if (in_array($job_type, array('chunk','movie'), true) && !$chunk_map) {
 				pirate69_fail_job($job_id, 'The selected chunk or movie ID was not found in the source index.');
 				return;
 			}
@@ -166,14 +181,15 @@ function pirate69_process_import_job($job_id) {
 				'chunk_pos' => 0,
 				'item_pos' => 0,
 				'retries' => 0,
-			'preview' => !empty($state['preview']),
+				'preview' => !empty($state['preview']),
+				'target' => $target,
 			);
 			$wpdb->update($table, array(
 				'total_items' => $job_total,
 				'payload' => wp_json_encode($state),
 				'updated_at' => current_time('mysql', true),
 			), array('id' => $job_id));
-			pirate69_log($job_id, 'info', 'Catalog index loaded.', array('items' => $valid_count, 'chunks' => count($chunk_map)));
+			pirate69_log($job_id, 'info', 'Catalog index loaded.', array('items' => $job_total, 'catalog_items' => $valid_count, 'chunks' => count($chunk_map), 'job_type' => $job_type, 'target' => $target));
 			pirate69_schedule_job($job_id, 5);
 			return;
 		}
