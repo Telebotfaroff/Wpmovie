@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "pirate69-theme/**"
+      - "pirate69-movie-manager/**"
       - ".github/workflows/php-check.yml"
   pull_request:
     paths:
@@ -31,7 +32,7 @@ jobs:
       - name: Lint all theme PHP files
         run: |
           set -eu
-          find pirate69-theme -type f -name '*.php' -print0 | while IFS= read -r -d '' file; do
+          find pirate69-theme pirate69-movie-manager -type f -name '*.php' -print0 | while IFS= read -r -d '' file; do
             php -l "$file"
           done
       - name: Verify required theme files
@@ -40,3 +41,4 @@ jobs:
           test -s pirate69-theme/functions.php
           test -s pirate69-theme/index.php
           grep -q 'Theme Name: Pirate69' pirate69-theme/style.css
+          grep -q 'Plugin Name: Pirate69 Movie Manager' pirate69-movie-manager/pirate69-movie-manager.php
