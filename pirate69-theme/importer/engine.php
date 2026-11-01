@@ -116,9 +116,20 @@ function pirate69_import_record($record, $category) {
 	$existing = get_posts(array('post_type' => array('p69_movie','p69_tv_show'), 'post_status' => array('publish','draft','private'), 'meta_key' => '_p69_source_id', 'meta_value' => $source_id, 'numberposts' => 1, 'fields' => 'ids'));
 	$post_id = $existing ? (int) $existing[0] : 0;
 	$old_fingerprint = $post_id ? get_post_meta($post_id, '_p69_source_fingerprint', true) : '';
-	if ($post_id && hash_equals((string) $old_fingerprint, $fingerprint)) return $post_id;
+	if ($post_id && hash_equals((string) $old_fingerprint, $fingerprint)) {
+		$poster_settings = pirate69_source_config()['settings'];
+		if (!empty($poster_settings['poster_import']) && !has_post_thumbnail($post_id) && !empty($record['poster'])) {
+			$poster_result = pirate69_import_poster($post_id, $record['poster']);
+			if (is_wp_error($poster_result)) update_post_meta($post_id, '_p69_poster_status', 'failed'); else update_post_meta($post_id, '_p69_poster_status', 'downloaded');
+		}
+		return $post_id;
+	}
 
-	$post_data = array('post_type' => $post_type, 'post_title' => $title, 'post_status' => 'publish');
+	$post_data = array('post_type' => $post_type, 'post_status' => 'publish');
+	$imported_title = $post_id ? get_post_meta($post_id, '_p69_imported_title', true) : '';
+	if (!$post_id || get_the_title($post_id) === $imported_title) {
+		$post_data['post_title'] = $title;
+	}
 	if ($post_id) {
 		$post_data['ID'] = $post_id;
 		$updated = wp_update_post(wp_slash($post_data), true);
@@ -128,6 +139,7 @@ function pirate69_import_record($record, $category) {
 	if (is_wp_error($updated)) return $updated;
 	$post_id = (int) $updated;
 	update_post_meta($post_id, '_p69_source_id', $source_id);
+	update_post_meta($post_id, '_p69_imported_title', $title);
 	update_post_meta($post_id, '_p69_source_category', $category);
 	update_post_meta($post_id, '_p69_source_url', esc_url_raw($record['sourceUrl'] ?? ''));
 	update_post_meta($post_id, '_p69_source_fingerprint', $fingerprint);
@@ -185,9 +197,10 @@ function pirate69_import_poster($post_id, $url) {
 	if (empty($filetype['ext']) || !in_array(strtolower($filetype['ext']), $allowed, true)) { @unlink($tmp); return new WP_Error('p69_poster_type', 'Poster file type is not supported.'); }
 	$file = array('name' => sanitize_file_name(basename((string) wp_parse_url($url, PHP_URL_PATH))), 'tmp_name' => $tmp);
 	$attachment_id = media_handle_sideload($file, $post_id);
-	if (is_wp_error($attachment_id)) { @unlink($tmp); return $attachment_id; }
+	if (is_wp_error($attachment_id)) { @unlink($tmp); update_post_meta($post_id, '_p69_poster_status', 'failed'); return $attachment_id; }
 	set_post_thumbnail($post_id, $attachment_id);
 	update_post_meta($post_id, '_p69_poster_attachment_id', (int) $attachment_id);
+	update_post_meta($post_id, '_p69_poster_status', 'downloaded');
 	return $attachment_id;
 }
 add_action('pirate69_process_import_job', 'pirate69_process_import_job');
