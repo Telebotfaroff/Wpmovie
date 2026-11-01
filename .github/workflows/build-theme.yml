@@ -1,0 +1,49 @@
+name: Build Pirate69 WordPress Theme
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "pirate69-theme/**"
+      - ".github/workflows/build-theme.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  package-theme:
+    name: Package installable theme ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate theme structure
+        run: |
+          test -f pirate69-theme/style.css || {
+            echo "::error::pirate69-theme/style.css is missing"
+            exit 1
+          }
+          grep -q "Theme Name:" pirate69-theme/style.css || {
+            echo "::error::style.css does not contain a WordPress Theme Name header"
+            exit 1
+          }
+          test -f pirate69-theme/functions.php
+          test -f pirate69-theme/index.php
+
+      - name: Create WordPress installable ZIP
+        run: |
+          rm -f pirate69-theme.zip
+          zip -r pirate69-theme.zip pirate69-theme \
+            -x "*/.git/*" "*/.DS_Store" "*/Thumbs.db"
+          unzip -l pirate69-theme.zip | head -40
+
+      - name: Upload theme package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pirate69-wordpress-theme
+          path: pirate69-theme.zip
+          if-no-files-found: error
+          retention-days: 30
