@@ -140,7 +140,7 @@ function pirate69_process_import_job($job_id) {
 		}
 		if (($state['phase'] ?? '') === 'feed_records') {
 			$records=$state['records']??array();$offset=absint($state['item_pos']??0);$size=max(1,min(30,absint(pirate69_source_config()['settings']['batch_size']??10)));$batch=array_slice($records,$offset,$size);
-			$counts=pirate69_process_record_batch($batch,$category,$job_id,!empty($state['preview']));$offset+=count($batch);$state['item_pos']=$offset;
+			$counts=pirate69_process_record_batch($batch,$category,$job_id,!empty($state['preview']));$offset+=absint($counts['processed']);$state['item_pos']=$offset;
 			$wpdb->query($wpdb->prepare("UPDATE {$table} SET processed_items=processed_items+%d,created_count=created_count+%d,updated_count=updated_count+%d,skipped_count=skipped_count+%d,error_count=error_count+%d,payload=%s,updated_at=%s WHERE id=%d",absint($counts['processed']),$counts['created'],$counts['updated'],$counts['skipped'],$counts['errors'],wp_json_encode($state),current_time('mysql',true),$job_id));
 			if($offset>=count($records)){$wpdb->update($table,array('status'=>'completed','updated_at'=>current_time('mysql',true)),array('id'=>$job_id));pirate69_log($job_id,'success','Homepage feed processing completed.',$counts);}else{pirate69_schedule_job($job_id,5);}return;
 		}
@@ -196,7 +196,7 @@ function pirate69_process_import_job($job_id) {
 
 		if (($state['phase'] ?? '') === 'chunk_records') {
 			$records=$state['records']??array();$offset=absint($state['item_pos']??0);$size=max(1,min(30,absint(pirate69_source_config()['settings']['batch_size']??10)));$batch=array_slice($records,$offset,$size);
-			$counts=pirate69_process_record_batch($batch,$category,$job_id,!empty($state['preview']));$offset+=count($batch);
+			$counts=pirate69_process_record_batch($batch,$category,$job_id,!empty($state['preview']));$offset+=absint($counts['processed']);
 			if($offset>=count($records)){$state['chunk_pos']=absint($state['chunk_pos']??0)+1;$state['item_pos']=0;$state['phase']='chunks';unset($state['records']);}else{$state['item_pos']=$offset;}
 			$wpdb->query($wpdb->prepare("UPDATE {$table} SET processed_items=processed_items+%d,created_count=created_count+%d,updated_count=updated_count+%d,skipped_count=skipped_count+%d,error_count=error_count+%d,payload=%s,updated_at=%s WHERE id=%d",count($batch),$counts['created'],$counts['updated'],$counts['skipped'],$counts['errors'],wp_json_encode($state),current_time('mysql',true),$job_id));
 			pirate69_schedule_job($job_id,5);return;
@@ -281,6 +281,31 @@ function pirate69_fail_job($job_id, $message) {
 	pirate69_log($job_id, 'error', $message);
 }
 
+
+/** Resolve source IDs through an indexed lookup, with a one-time legacy fallback. */
+function pirate69_find_source_post($category, $source_id) {
+	global $wpdb;
+	$table = $wpdb->prefix . 'p69_source_map';
+	$post_id = (int) $wpdb->get_var($wpdb->prepare(
+		"SELECT post_id FROM {$table} WHERE category = %s AND source_hash = %s LIMIT 1",
+		$category, hash('sha256', $source_id)
+	));
+	if ($post_id && get_post($post_id)) return $post_id;
+	$legacy = get_posts(array(
+		'post_type' => array('p69_movie','p69_tv_show'), 'post_status' => 'any',
+		'meta_key' => '_p69_source_id', 'meta_value' => $source_id,
+		'numberposts' => 1, 'fields' => 'ids', 'no_found_rows' => true,
+	));
+	if (!$legacy) return 0;
+	$post_id = (int) $legacy[0];
+	$wpdb->replace($table, array(
+		'category' => $category, 'source_id' => $source_id, 'source_hash' => hash('sha256', $source_id), 'post_id' => $post_id,
+		'fingerprint' => (string) get_post_meta($post_id, '_p69_source_fingerprint', true),
+		'updated_at' => current_time('mysql', true),
+	), array('%s','%s','%s','%d','%s','%s'));
+	return $post_id;
+}
+
 function pirate69_import_record($record, $category, $dry_run = false) {
 	global $wpdb;
 	$source_id = sanitize_text_field($record['id'] ?? '');
@@ -291,25 +316,12 @@ function pirate69_import_record($record, $category, $dry_run = false) {
 	if ($dry_run) { $found=get_posts(array('post_type'=>array('p69_movie','p69_tv_show'),'post_status'=>'any','meta_key'=>'_p69_source_id','meta_value'=>$source_id,'numberposts'=>1,'fields'=>'ids','no_found_rows'=>true)); if(!$found)return array('status'=>'created'); $old=get_post_meta((int)$found[0],'_p69_source_fingerprint',true); return array('status'=>hash_equals((string)$old,hash('sha256',wp_json_encode($record)))?'skipped':'updated'); }
 	$title = sanitize_text_field($record['cleanTitle'] ?? $record['fullTitle'] ?? $record['title'] ?? $source_id);
 	$fingerprint = hash('sha256', wp_json_encode($record));
-	$existing = get_posts(array(
-		'post_type' => array('p69_movie', 'p69_tv_show'),
-		'post_status' => 'any',
-		'meta_key' => '_p69_source_id',
-		'meta_value' => $source_id,
-		'numberposts' => 1,
-		'fields' => 'ids',
-		'no_found_rows' => true,
-	));
-	$post_id = $existing ? (int) $existing[0] : 0;
+	$post_id = pirate69_find_source_post($category, $source_id);
 	$old_fingerprint = $post_id ? get_post_meta($post_id, '_p69_source_fingerprint', true) : '';
 	if ($post_id && hash_equals((string) $old_fingerprint, $fingerprint)) {
 		$settings = pirate69_source_config()['settings'];
 		if (!empty($settings['poster_import']) && !has_post_thumbnail($post_id) && !empty($record['poster'])) {
-			$poster_result = pirate69_import_poster($post_id, $record['poster']);
-			if (is_wp_error($poster_result)) {
-				update_post_meta($post_id, '_p69_poster_status', 'failed');
-				pirate69_log(0, 'warning', 'Poster retry failed.', array('post_id' => $post_id, 'error' => $poster_result->get_error_message()));
-			}
+			pirate69_queue_poster($post_id, $record['poster']);
 		}
 		return $post_id;
 	}
@@ -334,6 +346,7 @@ function pirate69_import_record($record, $category, $dry_run = false) {
 	update_post_meta($post_id, '_p69_source_category', $category);
 	update_post_meta($post_id, '_p69_source_url', esc_url_raw($record['sourceUrl'] ?? ''));
 	update_post_meta($post_id, '_p69_source_fingerprint', $fingerprint);
+	$wpdb->replace($wpdb->prefix . 'p69_source_map', array('category'=>$category,'source_id'=>$source_id,'source_hash'=>hash('sha256',$source_id),'post_id'=>$post_id,'fingerprint'=>$fingerprint,'updated_at'=>current_time('mysql',true)), array('%s','%s','%s','%d','%s','%s'));
 	update_post_meta($post_id, '_p69_release_year', sanitize_text_field($record['year'] ?? ''));
 	update_post_meta($post_id, '_p69_quality', sanitize_text_field($record['quality'] ?? ''));
 	update_post_meta($post_id, '_p69_season', absint($record['season'] ?? 0));
@@ -350,11 +363,7 @@ function pirate69_import_record($record, $category, $dry_run = false) {
 
 	$settings = pirate69_source_config()['settings'];
 	if (!empty($settings['poster_import']) && !has_post_thumbnail($post_id) && !empty($record['poster'])) {
-		$poster_result = pirate69_import_poster($post_id, $record['poster']);
-		if (is_wp_error($poster_result)) {
-			update_post_meta($post_id, '_p69_poster_status', 'failed');
-			pirate69_log(0, 'warning', 'Poster download failed.', array('post_id' => $post_id, 'error' => $poster_result->get_error_message()));
-		}
+		pirate69_queue_poster($post_id, $record['poster']);
 	}
 	return $post_id;
 }
@@ -362,37 +371,33 @@ function pirate69_import_record($record, $category, $dry_run = false) {
 function pirate69_replace_imported_links($post_id, $links, $source_id) {
 	global $wpdb;
 	$table = $wpdb->prefix . 'p69_download_links';
-	$wpdb->delete($table, array('post_id' => $post_id, 'origin' => 'imported'), array('%d', '%s'));
-	if (!is_array($links)) {
-		return;
-	}
+	if (!is_array($links)) $links = array();
+	$rows = array();
 	foreach ($links as $i => $link) {
-		if (!is_array($link) || empty($link['url'])) {
-			continue;
-		}
+		if (!is_array($link) || empty($link['url'])) continue;
 		$url = esc_url_raw($link['url']);
-		if (!$url || !wp_http_validate_url($url)) {
-			continue;
-		}
-		$wpdb->insert($table, array(
-			'post_id' => $post_id,
-			'source_key' => substr($source_id . ':' . $i, 0, 191),
-			'label' => sanitize_text_field($link['label'] ?? ''),
-			'url' => $url,
-			'quality' => sanitize_text_field($link['quality'] ?? ''),
-			'file_size' => sanitize_text_field($link['size'] ?? ''),
-			'audio' => sanitize_text_field($link['audio'] ?? ''),
-			'server' => sanitize_text_field($link['server'] ?? ''),
-			'season' => absint($link['season'] ?? 0),
-			'episode' => sanitize_text_field(is_scalar($link['episode'] ?? '') ? (string)($link['episode'] ?? '') : ''),
-			'is_batch' => !empty($link['isBatch']) ? 1 : 0,
-			'sort_order' => absint($i),
-			'is_enabled' => 1,
-			'origin' => 'imported',
-			'created_at' => current_time('mysql', true),
-			'updated_at' => current_time('mysql', true),
-		));
+		if (!$url || !wp_http_validate_url($url)) continue;
+		$rows[] = array(
+			$post_id, substr($source_id . ':' . $i, 0, 191),
+			sanitize_text_field($link['label'] ?? ''), $url,
+			sanitize_text_field($link['quality'] ?? ''), sanitize_text_field($link['size'] ?? ''),
+			sanitize_text_field($link['audio'] ?? ''), sanitize_text_field($link['server'] ?? ''),
+			absint($link['season'] ?? 0),
+			sanitize_text_field(is_scalar($link['episode'] ?? '') ? (string)($link['episode'] ?? '') : ''),
+			!empty($link['isBatch']) ? 1 : 0, absint($i), 1, 'imported',
+			current_time('mysql', true), current_time('mysql', true)
+		);
 	}
+	$wpdb->delete($table, array('post_id'=>$post_id,'origin'=>'imported'), array('%d','%s'));
+	if (!$rows) return;
+	$placeholders = array();
+	$values = array();
+	foreach ($rows as $row) {
+		$placeholders[] = '(%d,%s,%s,%s,%s,%s,%s,%s,%d,%s,%d,%d,%d,%s,%s,%s)';
+		$values = array_merge($values, $row);
+	}
+	$sql = "INSERT INTO {$table} (post_id,source_key,label,url,quality,file_size,audio,server,season,episode,is_batch,sort_order,is_enabled,origin,created_at,updated_at) VALUES " . implode(',', $placeholders);
+	$wpdb->query($wpdb->prepare($sql, $values));
 }
 
 function pirate69_import_poster($post_id, $url) {
@@ -445,10 +450,16 @@ function pirate69_import_poster($post_id, $url) {
 
 
 function pirate69_process_record_batch($batch,$category,$job_id,$preview=false){
- $counts=array('created'=>0,'updated'=>0,'skipped'=>0,'errors'=>0);
- foreach($batch as $record){$result=pirate69_import_record($record,$category,$preview);$attempt=1;while(is_wp_error($result)&&$attempt<3){$attempt++;$result=pirate69_import_record($record,$category,$preview);}
+ $counts=array('created'=>0,'updated'=>0,'skipped'=>0,'errors'=>0,'processed'=>0);
+ $started=microtime(true);$time_budget=8;
+ foreach($batch as $record){
+  if($counts['processed']>0 && (microtime(true)-$started)>=$time_budget)break;
+  $result=pirate69_import_record($record,$category,$preview);$attempt=1;
+  while(is_wp_error($result)&&$attempt<3){$attempt++;$result=pirate69_import_record($record,$category,$preview);}
+  $counts['processed']++;
   if(is_wp_error($result)){$counts['errors']++;pirate69_log($job_id,'error',$result->get_error_message(),array('source_id'=>$record['id']??'','attempts'=>$attempt));}
-  elseif(is_array($result)&&isset($result['status']))$counts[$result['status']]++;else $counts['updated']++;
+  elseif(is_array($result)&&isset($result['status']))$counts[$result['status']]++;
+  else $counts['updated']++;
  }
  return $counts;
 }

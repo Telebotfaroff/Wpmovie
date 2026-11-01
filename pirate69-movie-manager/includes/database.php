@@ -79,11 +79,12 @@ function pirate69_install_schema() {
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 		category varchar(80) NOT NULL DEFAULT '',
 		source_id varchar(191) NOT NULL DEFAULT '',
+		source_hash char(64) NOT NULL DEFAULT '',
 		post_id bigint(20) unsigned NOT NULL,
 		fingerprint char(64) NOT NULL DEFAULT '',
 		updated_at datetime NOT NULL,
 		PRIMARY KEY  (id),
-		UNIQUE KEY source_lookup (category,source_id),
+		UNIQUE KEY source_lookup (category,source_hash),
 		KEY post_id (post_id)
 	) {$charset};";
 
