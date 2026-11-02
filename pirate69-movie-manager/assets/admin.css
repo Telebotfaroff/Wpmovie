@@ -50,3 +50,32 @@
  .p69-jobs-toolbar select,.p69-log-filters select,.p69-log-filters input{width:100%;min-height:40px}
  .p69-jobs-toolbar form .button{flex:1}
 }
+
+
+/* Multi-screen catalog control center */
+.p69-nav{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 20px;padding:7px;background:#fff;border:1px solid #e4e6ef;border-radius:12px}
+.p69-nav-link{display:inline-flex;align-items:center;padding:11px 15px;border-radius:8px;text-decoration:none;color:#626a7d;font-size:13px;font-weight:700}
+.p69-nav-link:hover{background:#f5f4fc;color:#5141bd}
+.p69-nav-link.is-active{background:#5746c6;color:#fff}
+.p69-stat-grid-five{grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:18px}
+.p69-dashboard-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.9fr);gap:15px}
+.p69-dashboard-grid .p69-admin-panel{margin:0}
+.p69-admin h2{font-size:19px;color:#292d40;margin:5px 0 12px}
+.p69-coverage-row{display:grid;grid-template-columns:160px minmax(100px,1fr) 42px;align-items:center;gap:12px;margin:18px 0}
+.p69-coverage-row>div:first-child{display:flex;flex-direction:column;gap:4px}.p69-coverage-row strong{font-size:13px;color:#303449}.p69-coverage-row span,.p69-muted,.p69-footnote{font-size:11px;color:#858b9c}
+.p69-coverage-row>b{text-align:right;font-size:12px;color:#5746c6}
+.p69-coverage-track{height:9px;background:#eeeef5;border-radius:20px;overflow:hidden}.p69-coverage-track i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#5746c6,#a18af3)}
+.p69-action-card{display:flex;align-items:center;gap:13px;padding:13px 12px;margin:8px 0;border:1px solid #ececf3;border-radius:10px;text-decoration:none;color:#292d40;background:#fff}
+.p69-action-card:hover{border-color:#b9b0ed;background:#faf9ff}.p69-action-card>.dashicons{color:#6754d0;font-size:20px}.p69-action-card span:last-child{display:flex;flex-direction:column;gap:3px}.p69-action-card small{font-size:11px;color:#858b9c}
+.p69-search-form{grid-template-columns:190px minmax(180px,1fr) auto}.p69-results-heading{display:flex;justify-content:space-between;gap:10px;margin:18px 0 10px;font-size:12px}.p69-results-heading span{color:#858b9c}
+.p69-search-panel code,.p69-admin td code{display:block;margin-top:5px;color:#888da0;font-size:10px;overflow-wrap:anywhere}
+.p69-empty-state{text-align:center;padding:48px 15px;color:#858b9c}.p69-empty-state>.dashicons{font-size:32px;width:32px;height:32px;color:#7564d7}.p69-empty-state h2{margin:14px 0 5px}.p69-empty-state p,.p69-empty{font-size:12px;color:#858b9c}
+.p69-jobs-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}.p69-jobs-toolbar form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.p69-status{display:inline-block;padding:5px 8px;border-radius:20px;font-size:10px;font-weight:750;text-transform:uppercase;letter-spacing:.3px;background:#f0eff5;color:#666b7b}
+.p69-status-running{background:#eaf2ff;color:#3867bd}.p69-status-pending{background:#fff6e6;color:#a36a12}.p69-status-paused{background:#f1edff;color:#6a54bd}.p69-status-completed{background:#e7f7ef;color:#218354}.p69-status-failed{background:#fff0f0;color:#bd4545}.p69-status-cancelled{background:#f0f0f0;color:#777}
+.p69-admin td small{display:block;margin-top:4px;color:#8b90a0;font-size:10px}.p69-progress-label{display:block;margin-top:5px;color:#7a8091;font-size:10px}.p69-worker-status{margin:12px 0;padding:12px 15px;border-radius:9px;background:#edf7ff;color:#32659b;font-size:12px}
+.p69-log-list{border-top:1px solid #ececf2}.p69-log-entry{display:flex;gap:12px;padding:13px 4px;border-bottom:1px solid #f0f1f5}.p69-log-entry>div{min-width:0}.p69-log-entry strong{font-size:12px;color:#373c50}.p69-log-entry p,.p69-log-entry small{display:block;margin:4px 0 0;font-size:10px;color:#858b9c;overflow-wrap:anywhere}.p69-log-dot{flex:0 0 8px;width:8px;height:8px;margin:5px 0 0;border-radius:50%;background:#9da2b1}.p69-log-success{background:#28a36a}.p69-log-error{background:#d9535d}.p69-log-warning{background:#e5a13a}.p69-log-info{background:#6488d9}
+.p69-error-text{color:#b34b4b}.p69-admin .p69-inline-form .button{margin:1px}
+@media(max-width:1100px){.p69-stat-grid-five{grid-template-columns:repeat(3,minmax(0,1fr))}.p69-dashboard-grid{grid-template-columns:1fr}}
+@media(max-width:782px){.p69-stat-grid-five{grid-template-columns:repeat(2,minmax(0,1fr))}.p69-coverage-row{grid-template-columns:120px minmax(70px,1fr) 35px}.p69-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.p69-nav-link{justify-content:center}.p69-search-form{grid-template-columns:1fr}.p69-jobs-toolbar form{width:100%}.p69-jobs-toolbar select{width:100%;min-height:40px}.p69-jobs-toolbar form .button{flex:1}}
+@media(max-width:480px){.p69-stat-grid-five{grid-template-columns:1fr 1fr}.p69-coverage-row{grid-template-columns:1fr 35px}.p69-coverage-row .p69-coverage-track{grid-column:1/2;grid-row:2}.p69-coverage-row>b{grid-column:2;grid-row:1}.p69-nav{grid-template-columns:1fr 1fr}.p69-hero-mark{display:none}}
