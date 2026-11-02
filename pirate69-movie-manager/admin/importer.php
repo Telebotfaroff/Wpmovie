@@ -16,6 +16,15 @@ function pirate69_importer_action() {
 		$target = sanitize_text_field(wp_unslash($_POST['target'] ?? ''));
 		$result = pirate69_create_import_job($category, $job_type, $target);
 		$notice = is_wp_error($result) ? $result->get_error_message() : 'Import job #' . absint($result) . ' queued.';
+	} elseif ($action === 'clear_logs') {
+		global $wpdb;
+		$wpdb->query("TRUNCATE TABLE {$wpdb->prefix}p69_import_logs");
+		$notice = 'Recent activity cleared.';
+	} elseif ($action === 'clear_completed') {
+		global $wpdb;
+		$table = $wpdb->prefix . 'p69_import_jobs';
+		$wpdb->query("DELETE FROM {$table} WHERE status IN ('completed','failed','cancelled')");
+		$notice = 'Finished job history cleared. Active jobs were kept.';
 	} else {
 		$job_id = absint($_POST['job_id'] ?? 0);
 		global $wpdb; $table = $wpdb->prefix . 'p69_import_jobs';
@@ -86,8 +95,21 @@ function pirate69_render_importer() {
 	global $wpdb;
 	$jobs_table = $wpdb->prefix . 'p69_import_jobs';
 	$logs_table = $wpdb->prefix . 'p69_import_logs';
-	$jobs = $wpdb->get_results("SELECT * FROM {$jobs_table} ORDER BY id DESC LIMIT 12",ARRAY_A);
-	$logs = $wpdb->get_results("SELECT * FROM {$logs_table} ORDER BY id DESC LIMIT 20",ARRAY_A);
+	$job_status = sanitize_key($_GET['job_status'] ?? 'all');
+	$job_catalog = sanitize_key($_GET['job_catalog'] ?? 'all');
+	$job_where = array('1=1');
+	$job_args = array();
+	if (in_array($job_status, array('pending','running','paused','completed','failed','cancelled'), true)) { $job_where[] = 'status=%s'; $job_args[] = $job_status; }
+	if ($job_catalog !== 'all' && preg_match('/^[a-z0-9_-]+$/', $job_catalog)) { $job_where[] = 'category=%s'; $job_args[] = $job_catalog; }
+	$job_sql = "SELECT * FROM {$jobs_table} WHERE " . implode(' AND ', $job_where) . " ORDER BY id DESC LIMIT 50";
+	$jobs = $job_args ? $wpdb->get_results($wpdb->prepare($job_sql, $job_args), ARRAY_A) : $wpdb->get_results($job_sql, ARRAY_A);
+	$log_level = sanitize_key($_GET['log_level'] ?? 'all');
+	$log_search = sanitize_text_field(wp_unslash($_GET['log_search'] ?? ''));
+	$log_where = array('1=1'); $log_args = array();
+	if (in_array($log_level, array('info','warning','error'), true)) { $log_where[] = 'level=%s'; $log_args[] = $log_level; }
+	if ($log_search !== '') { $log_where[] = 'message LIKE %s'; $log_args[] = '%' . $wpdb->esc_like($log_search) . '%'; }
+	$log_sql = "SELECT * FROM {$logs_table} WHERE " . implode(' AND ', $log_where) . " ORDER BY id DESC LIMIT 50";
+	$logs = $log_args ? $wpdb->get_results($wpdb->prepare($log_sql, $log_args), ARRAY_A) : $wpdb->get_results($log_sql, ARRAY_A);
 	$notice = get_transient('pirate69_importer_notice');
 	if ($notice) delete_transient('pirate69_importer_notice');
 	$categories = pirate69_source_categories();
@@ -121,7 +143,12 @@ function pirate69_render_importer() {
 		<div class="p69-stat-card"><span class="p69-stat-label">Failed jobs</span><strong><?php echo number_format_i18n($failed_count); ?></strong><small>Need attention</small></div>
 	</div>
 	<?php if($notice): ?><div class="notice notice-info is-dismissible"><p><?php echo esc_html($notice); ?></p></div><?php endif; ?>
-
+	<nav class="p69-tabs" aria-label="Movie manager sections">
+		<button type="button" class="p69-tab is-active" data-p69-tab="import">Import catalog</button>
+		<button type="button" class="p69-tab" data-p69-tab="jobs">Import jobs <span><?php echo number_format_i18n($active_count); ?></span></button>
+		<button type="button" class="p69-tab" data-p69-tab="posters">Posters &amp; activity</button>
+	</nav>
+	<div class="p69-tab-panel is-active" data-p69-panel="import">
 	<div class="p69-section-heading"><div><span class="p69-section-kicker">DISCOVER</span><h2>Find something to import</h2><p>Search the master index first. Detailed chunk data is fetched only after you choose an import.</p></div><span class="p69-step">01</span></div>
 	<div class="p69-admin-panel p69-search-panel">
 		<h3><span class="dashicons dashicons-search"></span> Source catalog search</h3>
@@ -173,6 +200,8 @@ function pirate69_render_importer() {
 		</form>
 	</div></div>
 
+	</div>
+	<div class="p69-tab-panel" data-p69-panel="jobs">
 	<div class="p69-section-heading"><div><span class="p69-section-kicker">MONITOR</span><h2>Import activity</h2><p>Track progress, inspect results and control running jobs.</p></div><span class="p69-live-indicator">● LIVE</span></div>
 	<div class="p69-admin-panel p69-jobs-panel"><div class="p69-panel-heading"><h3>Recent jobs</h3><span>Last 12 jobs</span></div><div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>ID</th><th>Catalog / target</th><th>Status</th><th>Progress</th><th>Results</th><th>Errors</th><th>Actions</th></tr></thead><tbody>
 	<?php if($jobs): foreach($jobs as $job):
@@ -188,11 +217,40 @@ function pirate69_render_importer() {
 		<?php endforeach; ?></td></tr>
 	<?php endforeach; else: ?><tr><td colspan="7">No import jobs yet.</td></tr><?php endif; ?></tbody></table></div></div>
 
+	<div class="p69-jobs-toolbar">
+		<form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
+			<input type="hidden" name="page" value="pirate69-importer">
+			<select name="job_status" aria-label="Filter jobs by status"><option value="all">All statuses</option><?php foreach(array('pending','running','paused','completed','failed','cancelled') as $status): ?><option value="<?php echo esc_attr($status); ?>" <?php selected($job_status,$status); ?>><?php echo esc_html(ucfirst($status)); ?></option><?php endforeach; ?></select>
+			<select name="job_catalog" aria-label="Filter jobs by catalog"><option value="all">All catalogs</option><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($job_catalog,$key); ?>><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select>
+			<button class="button">Apply filters</button>
+			<a class="button" href="<?php echo esc_url(admin_url('admin.php?page=pirate69-importer')); ?>">Reset</a>
+		</form>
+		<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Clear completed, failed and cancelled job history? Active jobs will remain.');">
+			<?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="clear_completed"><button class="button">Clear finished history</button>
+		</form>
+	</div>
+	</div>
+	<div class="p69-tab-panel" data-p69-panel="posters">
 	<div class="p69-tool-grid p69-bottom-grid"><div class="p69-admin-panel"><h3><span class="dashicons dashicons-format-image"></span> Poster manager</h3>
 	<p id="p69-poster-status" aria-live="polite">Checking poster queue…</p><p>Retry failed poster downloads without replacing existing featured images.</p><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_poster_retry'); ?><input type="hidden" name="action" value="pirate69_poster_retry"><button class="button">Retry failed posters (up to 30)</button></form></div>
-	<div class="p69-admin-panel p69-activity-panel"><h3><span class="dashicons dashicons-list-view"></span> Recent activity</h3><ul><?php if($logs): foreach($logs as $log): ?><li><code><?php echo esc_html($log['created_at']); ?></code> <strong><?php echo esc_html(strtoupper($log['level'])); ?></strong> <?php echo esc_html($log['message']); ?></li><?php endforeach; else: ?><li>No logs yet.</li><?php endif; ?></ul></div></div>
+	<div class="p69-admin-panel p69-activity-panel"><div class="p69-panel-heading"><h3><span class="dashicons dashicons-list-view"></span> Recent activity</h3><span>Latest 50 entries</span></div>
+	<form class="p69-log-filters" method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>"><input type="hidden" name="page" value="pirate69-importer"><select name="log_level"><option value="all">All levels</option><?php foreach(array('info','warning','error') as $level): ?><option value="<?php echo esc_attr($level); ?>" <?php selected($log_level,$level); ?>><?php echo esc_html(ucfirst($level)); ?></option><?php endforeach; ?></select><input type="search" name="log_search" value="<?php echo esc_attr($log_search); ?>" placeholder="Search activity"><button class="button">Filter</button></form>
+	<form class="p69-clear-logs" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Permanently clear recent activity logs?');"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="clear_logs"><button class="button">Clear recent activity</button></form><ul><?php if($logs): foreach($logs as $log): ?><li><code><?php echo esc_html($log['created_at']); ?></code> <strong><?php echo esc_html(strtoupper($log['level'])); ?></strong> <?php echo esc_html($log['message']); ?></li><?php endforeach; else: ?><li>No logs yet.</li><?php endif; ?></ul></div></div>
+	</div>
+	</div>
 	</div>
 	
+<script>
+(function(){
+ const tabs=document.querySelectorAll('[data-p69-tab]'), panels=document.querySelectorAll('[data-p69-panel]');
+ tabs.forEach(function(tab){tab.addEventListener('click',function(){
+  tabs.forEach(function(item){item.classList.toggle('is-active',item===tab);});
+  panels.forEach(function(panel){panel.classList.toggle('is-active',panel.getAttribute('data-p69-panel')===tab.getAttribute('data-p69-tab'));});
+  try{sessionStorage.setItem('p69-active-tab',tab.getAttribute('data-p69-tab'));}catch(e){}
+ });});
+ try{const saved=sessionStorage.getItem('p69-active-tab');const target=document.querySelector('[data-p69-tab="'+saved+'"]');if(target)target.click();}catch(e){}
+})();
+</script>
 <?php if ($has_active): ?>
 <script>
 (function () {
