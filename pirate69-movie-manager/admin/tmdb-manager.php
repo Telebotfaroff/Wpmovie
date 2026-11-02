@@ -81,7 +81,7 @@ function pirate69_render_tmdb_manager() {
 			$meta_query = array(array('key' => '_p69_tmdb_status', 'value' => $status));
 		}
 	}
-	$args = array('post_type' => array('p69_movie', 'p69_tv_show'), 'post_status' => array('publish', 'draft', 'pending', 'private'), 'posts_per_page' => 30, 'orderby' => 'modified', 'order' => 'DESC', 'meta_query' => $meta_query);
+	$args = array('post_type' => array('p69_movie', 'p69_tv_show'), 'post_status' => array('publish', 'draft', 'pending', 'private'), 'posts_per_page' => 30, 'paged' => max(1, absint($_GET['paged'] ?? 1)), 'orderby' => 'modified', 'order' => 'DESC', 'meta_query' => $meta_query);
 	if ($search !== '') $args['s'] = $search;
 	$items = new WP_Query($args);
 	$nonce = wp_create_nonce('p69_tmdb_manager');
