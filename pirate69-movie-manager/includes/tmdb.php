@@ -124,8 +124,18 @@ function pirate69_tmdb_sync_post($post_id, $force = false) {
 		update_post_meta($post_id, '_p69_tmdb_type', $tmdb_type);
 		update_post_meta($post_id, '_p69_tmdb_match_score', $match['score']);
 	}
-	$details = pirate69_tmdb_request($tmdb_type . '/' . $tmdb_id, array('append_to_response' => 'credits,external_ids'));
-	if (is_wp_error($details)) return $details;
+	$details = pirate69_tmdb_request($tmdb_type . '/' . $tmdb_id, array('append_to_response' => 'credits,external_ids,images,videos'));
+	if (is_wp_error($details)) {
+		update_post_meta($post_id, '_p69_tmdb_status', 'failed');
+		update_post_meta($post_id, '_p69_tmdb_error', $details->get_error_message());
+		return $details;
+	}
+	if (empty($details['id']) || absint($details['id']) !== $tmdb_id) {
+		$error = new WP_Error('p69_tmdb_invalid_details', 'TMDb returned an unexpected or incomplete record.');
+		update_post_meta($post_id, '_p69_tmdb_status', 'failed');
+		update_post_meta($post_id, '_p69_tmdb_error', $error->get_error_message());
+		return $error;
+	}
 	$title = $tmdb_type === 'tv' ? ($details['name'] ?? '') : ($details['title'] ?? '');
 	$original = $tmdb_type === 'tv' ? ($details['original_name'] ?? '') : ($details['original_title'] ?? '');
 	$date = $tmdb_type === 'tv' ? ($details['first_air_date'] ?? '') : ($details['release_date'] ?? '');
@@ -151,6 +161,20 @@ function pirate69_tmdb_sync_post($post_id, $force = false) {
 	foreach ((array) ($details['credits']['crew'] ?? array()) as $person) {
 		if (($person['job'] ?? '') === 'Director' && !empty($person['name'])) $crew[] = sanitize_text_field($person['name']);
 	}
+	$companies = array();
+	foreach ((array) ($details['production_companies'] ?? array()) as $company) { if (!empty($company['name'])) $companies[] = sanitize_text_field($company['name']); }
+	$countries = array();
+	foreach ((array) ($details['production_countries'] ?? array()) as $country) { if (!empty($country['name'])) $countries[] = sanitize_text_field($country['name']); }
+	$languages = array();
+	foreach ((array) ($details['spoken_languages'] ?? array()) as $language) { if (!empty($language['english_name'])) $languages[] = sanitize_text_field($language['english_name']); }
+	$networks = array();
+	foreach ((array) ($details['networks'] ?? array()) as $network) { if (!empty($network['name'])) $networks[] = sanitize_text_field($network['name']); }
+	$creators = array();
+	foreach ((array) ($details['created_by'] ?? array()) as $creator) { if (!empty($creator['name'])) $creators[] = sanitize_text_field($creator['name']); }
+	$trailers = array();
+	foreach ((array) ($details['videos']['results'] ?? array()) as $video) {
+		if (($video['site'] ?? '') === 'YouTube' && in_array(($video['type'] ?? ''), array('Trailer', 'Teaser'), true) && !empty($video['key'])) $trailers[] = esc_url_raw('https://www.youtube.com/watch?v=' . rawurlencode($video['key']));
+	}
 	$meta = array(
 		'_p69_tmdb_status' => 'matched',
 		'_p69_tmdb_title' => sanitize_text_field($title),
@@ -166,6 +190,15 @@ function pirate69_tmdb_sync_post($post_id, $force = false) {
 		'_p69_tmdb_genres' => $genres,
 		'_p69_tmdb_cast' => $cast,
 		'_p69_tmdb_directors' => array_values(array_unique($crew)),
+		'_p69_tmdb_companies' => array_values(array_unique($companies)),
+		'_p69_tmdb_countries' => array_values(array_unique($countries)),
+		'_p69_tmdb_languages' => array_values(array_unique($languages)),
+		'_p69_tmdb_networks' => array_values(array_unique($networks)),
+		'_p69_tmdb_creators' => array_values(array_unique($creators)),
+		'_p69_tmdb_season_count' => absint($details['number_of_seasons'] ?? 0),
+		'_p69_tmdb_episode_count' => absint($details['number_of_episodes'] ?? 0),
+		'_p69_tmdb_trailers' => array_values(array_unique($trailers)),
+		'_p69_tmdb_imdb_id' => sanitize_text_field($details['external_ids']['imdb_id'] ?? ''),
 		'_p69_tmdb_poster_url' => esc_url_raw($poster_url),
 		'_p69_tmdb_backdrop_url' => esc_url_raw($backdrop_url),
 		'_p69_tmdb_last_sync' => current_time('mysql', true),
@@ -173,12 +206,19 @@ function pirate69_tmdb_sync_post($post_id, $force = false) {
 	);
 	foreach ($meta as $key => $value) update_post_meta($post_id, $key, $value);
 	if ($year) update_post_meta($post_id, '_p69_release_year', $year);
+	update_post_meta($post_id, '_p69_tmdb_match_source', get_post_meta($post_id, '_p69_tmdb_match_source', true) ?: 'automatic');
 	if ($poster_url && function_exists('pirate69_import_poster')) {
 		$current_poster_source = get_post_meta($post_id, '_p69_poster_source', true);
-		if ($current_poster_source !== 'tmdb') {
+		$previous_tmdb_url = get_post_meta($post_id, '_p69_poster_source_url', true);
+		if ($current_poster_source !== 'tmdb' || $previous_tmdb_url !== $poster_url) {
 			$attachment = pirate69_import_poster($post_id, $poster_url);
-			if (!is_wp_error($attachment)) update_post_meta($post_id, '_p69_poster_source', 'tmdb');
-			else update_post_meta($post_id, '_p69_tmdb_poster_error', $attachment->get_error_message());
+			if (!is_wp_error($attachment)) {
+				update_post_meta($post_id, '_p69_poster_source', 'tmdb');
+				update_post_meta($post_id, '_p69_poster_source_url', $poster_url);
+				delete_post_meta($post_id, '_p69_tmdb_poster_error');
+			} else {
+				update_post_meta($post_id, '_p69_tmdb_poster_error', $attachment->get_error_message());
+			}
 		}
 	}
 	return array('status' => 'matched', 'tmdb_id' => $tmdb_id, 'title' => $title);
