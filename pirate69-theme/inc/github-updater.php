@@ -53,8 +53,8 @@ final class Pirate69_Theme_GitHub_Updater {
 
         $release = self::release();
         $package = self::package_url($release);
-        $version = isset($release['tag_name']) ? trim($release['tag_name']) : '';
-        $version = preg_replace('/^theme-v/i', '', $version);
+        $version = '';
+        if (!empty($release['tag_name']) && preg_match('/theme-v(\\d+\\.\\d+\\.\\d+)/i', $release['tag_name'], $match)) $version = $match[1];
 
         if (!$package || !$version || !preg_match('/^\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?$/', $version)) return $transient;
 
@@ -76,7 +76,8 @@ final class Pirate69_Theme_GitHub_Updater {
     public static function theme_information($result, $action, $args) {
         if ('theme_information' !== $action || empty($args->slug) || get_template() !== $args->slug) return $result;
         $release = self::release();
-        $version = isset($release['tag_name']) ? preg_replace('/^theme-v/i', '', trim($release['tag_name'])) : '';
+        $version = '';
+        if (!empty($release['tag_name']) && preg_match('/theme-v(\\d+\\.\\d+\\.\\d+)/i', $release['tag_name'], $match)) $version = $match[1];
         if (!$version) return $result;
         $info = new stdClass();
         $info->name = 'Pirate69';
