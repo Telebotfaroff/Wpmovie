@@ -1,5 +1,11 @@
 (function () {
   'use strict';
+  var selectAll = document.getElementById('p69-select-all-results');
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      document.querySelectorAll('.p69-result-checkbox').forEach(function (checkbox) { checkbox.checked = selectAll.checked; });
+    });
+  }
   var worker = document.querySelector('[data-p69-worker]');
   if (!worker || typeof P69Importer === 'undefined') return;
   var ids = [];
