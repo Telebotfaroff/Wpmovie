@@ -37,7 +37,7 @@ function pirate69_render_import_settings() {
 	$s = wp_parse_args(get_option('pirate69_import_settings', array()), array(
 		'owner'=>'7xmovies','repository'=>'database','branch'=>'main','timeout'=>20,'import_mode'=>'balanced',
 		'batch_size'=>5,'poster_import'=>1,'poster_max_mb'=>8,'poster_retry_limit'=>3,
-		'tmdb_token'=>'','tmdb_auto_sync'=>1,'tmdb_language'=>'en-US','tmdb_image_size'=>'w500','tmdb_min_score'=>82,
+		'tmdb_token'=>'','tmdb_auto_sync'=>0,'tmdb_language'=>'en-US','tmdb_image_size'=>'w500','tmdb_min_score'=>82,
 	));
 	?>
 	<div class="wrap"><h1>Importer Settings</h1>
@@ -59,7 +59,7 @@ function pirate69_render_import_settings() {
 	<p>TMDB supplies movie/TV details and artwork. GitHub remains responsible for download links.</p>
 	<table class="form-table">
 	<tr><th scope="row">TMDB API Read Access Token</th><td><textarea class="large-text code" rows="3" autocomplete="off" name="pirate69_import_settings[tmdb_token]" placeholder="Paste your TMDB API Read Access Token"><?php echo esc_textarea($s['tmdb_token']); ?></textarea><p class="description">Create a token in your TMDB account under Settings → API. Leave blank to keep the saved token.</p></td></tr>
-	<tr><th scope="row">Automatic metadata sync</th><td><label><input type="checkbox" name="pirate69_import_settings[tmdb_auto_sync]" value="1" <?php checked($s['tmdb_auto_sync'],1); ?>> Match imported titles and sync metadata from TMDB in a separate background task</label></td></tr>
+	<tr><th scope="row">Automatic metadata sync</th><td><label><input type="checkbox" name="pirate69_import_settings[tmdb_auto_sync]" value="1" <?php checked($s['tmdb_auto_sync'],1); ?>> Automatically attempt high-confidence title matching after import. Leave disabled to review and confirm matches in TMDb Manager.</label></td></tr>
 	<tr><th scope="row">Metadata language</th><td><input name="pirate69_import_settings[tmdb_language]" value="<?php echo esc_attr($s['tmdb_language']); ?>" class="regular-text"><p class="description">Example: en-US, hi-IN.</p></td></tr>
 	<tr><th scope="row">Poster image size</th><td><select name="pirate69_import_settings[tmdb_image_size]"><?php foreach (array('w342','w500','w780','original') as $size) : ?><option value="<?php echo esc_attr($size); ?>" <?php selected($s['tmdb_image_size'],$size); ?>><?php echo esc_html($size); ?></option><?php endforeach; ?></select></td></tr>
 	<tr><th scope="row">Minimum match score</th><td><input type="number" min="65" max="98" name="pirate69_import_settings[tmdb_min_score]" value="<?php echo absint($s['tmdb_min_score']); ?>"> / 100 <p class="description">Higher values reduce incorrect automatic matches. Ambiguous titles are marked unmatched instead of guessed.</p></td></tr>
