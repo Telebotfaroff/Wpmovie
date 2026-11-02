@@ -162,7 +162,7 @@ function pirate69_render_importer() {
 		$state=json_decode($job['payload']??'',true);$state=is_array($state)?$state:array();$chunks=$state['chunks']??array();$chunk_pos=absint($state['chunk_pos']??0);$current_chunk=isset($chunks[$chunk_pos])?absint($chunks[$chunk_pos]):0;
 		$target_label=in_array($job['job_type'],array('chunk','movie'),true)?' · '.$job['job_type'].' '.($state['target']??''):'';
 		?>
-		<tr><td>#<?php echo absint($job['id']); ?></td><td><?php echo esc_html($job['category'].$target_label); ?></td><td><strong><?php echo esc_html($job['status']); ?></strong><br><small><?php echo esc_html($state['phase']??'queued'); ?></small></td>
+		<tr data-p69-job="<?php echo absint($job['id']); ?>"><td>#<?php echo absint($job['id']); ?></td><td><?php echo esc_html($job['category'].$target_label); ?></td><td><strong><?php echo esc_html($job['status']); ?></strong><br><small><?php echo esc_html($state['phase']??'queued'); ?></small></td>
 		<td><progress max="100" value="<?php echo esc_attr($pct); ?>" style="width:120px"></progress> <?php echo esc_html($done.' / '.($total?:'…').' ('.$pct.'%)'); ?><?php if($current_chunk): ?><br><small>Current chunk #<?php echo $current_chunk; ?> · chunk <?php echo ($chunk_pos+1); ?> of <?php echo count($chunks); ?></small><?php endif; ?></td>
 		<td>+<?php echo absint($job['created_count']??0); ?> / ~<?php echo absint($job['updated_count']??0); ?> / =<?php echo absint($job['skipped_count']??0); ?></td><td><?php echo absint($job['error_count']); ?></td><td>
 		<?php foreach(array('pause'=>'Pause','resume'=>'Resume','retry'=>'Retry','cancel'=>'Cancel') as $key=>$label): if(($key==='pause' && !in_array($job['status'],array('running','pending'),true)) || ($key==='resume' && $job['status']!=='paused') || ($key==='retry' && $job['status']!=='failed') || ($key==='cancel' && !in_array($job['status'],array('pending','running','paused'),true))) continue; ?>
@@ -173,6 +173,35 @@ function pirate69_render_importer() {
 	<div class="p69-tool-grid p69-bottom-grid"><div class="p69-admin-panel"><h3><span class="dashicons dashicons-format-image"></span> Poster manager</h3><p>Retry failed poster downloads without replacing existing featured images.</p><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_poster_retry'); ?><input type="hidden" name="action" value="pirate69_poster_retry"><button class="button">Retry failed posters (up to 30)</button></form></div>
 	<div class="p69-admin-panel p69-activity-panel"><h3><span class="dashicons dashicons-list-view"></span> Recent activity</h3><ul><?php if($logs): foreach($logs as $log): ?><li><code><?php echo esc_html($log['created_at']); ?></code> <strong><?php echo esc_html(strtoupper($log['level'])); ?></strong> <?php echo esc_html($log['message']); ?></li><?php endforeach; else: ?><li>No logs yet.</li><?php endif; ?></ul></div></div>
 	</div>
-	<?php if($has_active): ?><script>setTimeout(function(){window.location.reload();},8000);</script><?php endif; ?>
+	
+<?php if ($has_active): ?>
+<script>
+(function () {
+ const jobs = <?php echo wp_json_encode(array_values(array_map('absint', array_column(array_filter((array) $jobs, function ($job) { return in_array($job['status'], array('pending', 'running'), true); }), 'id'))); ?>;
+ const endpoint = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
+ const nonce = <?php echo wp_json_encode(wp_create_nonce('pirate69_import_worker')); ?>;
+ let cursor = 0;
+ function worker() {
+  if (cursor >= jobs.length) { window.location.reload(); return; }
+  const body = new URLSearchParams({action: 'pirate69_import_worker', nonce: nonce, job_id: String(jobs[cursor])});
+  fetch(endpoint, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}, body: body.toString()})
+   .then(function (response) { return response.json(); })
+   .then(function (response) {
+    if (!response.success) { cursor++; setTimeout(worker, 1000); return; }
+    const job = response.data;
+    const row = document.querySelector('tr[data-p69-job="' + job.id + '"]');
+    if (row) {
+     const progress = row.querySelector('progress');
+     if (progress && job.total > 0) { progress.value = Math.floor(job.processed / job.total * 100); }
+    }
+    if (job.status === 'pending' || job.status === 'running') setTimeout(worker, 450);
+    else { cursor++; setTimeout(worker, 200); }
+   }).catch(function () { setTimeout(worker, 1500); });
+ }
+ worker();
+})();
+</script>
+<?php endif; ?>
+
 	<?php
 }
