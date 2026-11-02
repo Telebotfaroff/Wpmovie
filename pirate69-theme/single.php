@@ -10,7 +10,15 @@ get_header();
 	$category = get_post_meta($post_id, '_p69_source_category', true);
 	$source_url = get_post_meta($post_id, '_p69_source_url', true);
 	$source_id = get_post_meta($post_id, '_p69_source_id', true);
-	$poster_fallback = esc_url(get_post_meta($post_id, '_p69_original_poster_url', true));
+	$poster_fallback = esc_url(get_post_meta($post_id, '_p69_tmdb_poster_url', true));
+	if (!$poster_fallback) $poster_fallback = esc_url(get_post_meta($post_id, '_p69_original_poster_url', true));
+	$tmdb_rating = get_post_meta($post_id, '_p69_tmdb_rating', true);
+	$tmdb_runtime = absint(get_post_meta($post_id, '_p69_tmdb_runtime', true));
+	$tmdb_tagline = get_post_meta($post_id, '_p69_tmdb_tagline', true);
+	$tmdb_cast = get_post_meta($post_id, '_p69_tmdb_cast', true);
+	$tmdb_directors = get_post_meta($post_id, '_p69_tmdb_directors', true);
+	$tmdb_genres = get_post_meta($post_id, '_p69_tmdb_genres', true);
+	$tmdb_backdrop = esc_url(get_post_meta($post_id, '_p69_tmdb_backdrop_url', true));
 	$links = array();
 	global $wpdb;
 	$table = $wpdb->prefix . 'p69_download_links';
@@ -37,7 +45,7 @@ get_header();
 		<span><?php the_title(); ?></span>
 	</nav>
 
-	<section class="p69-detail-hero">
+	<section class="p69-detail-hero"<?php if ($tmdb_backdrop) : ?> style="--p69-tmdb-backdrop:url('<?php echo esc_url($tmdb_backdrop); ?>')"<?php endif; ?>>
 		<div class="p69-detail-poster">
 			<?php if (has_post_thumbnail()) : the_post_thumbnail('large', array('loading' => 'eager')); elseif ($poster_fallback) : ?><img src="<?php echo esc_url($poster_fallback); ?>" alt="<?php echo esc_attr(get_the_title()); ?>" loading="eager" decoding="async"><?php else : ?>
 				<div class="poster-placeholder"><b>P69</b><small><?php esc_html_e('POSTER PENDING', 'pirate69'); ?></small></div>
@@ -46,9 +54,12 @@ get_header();
 		<div class="p69-detail-main">
 			<p class="eyebrow"><?php echo esc_html($post_type ? $post_type->labels->singular_name : __('Catalog title', 'pirate69')); ?></p>
 			<h1><?php the_title(); ?></h1>
+			<?php if ($tmdb_tagline) : ?><p class="p69-tmdb-tagline"><?php echo esc_html($tmdb_tagline); ?></p><?php endif; ?>
 			<div class="p69-detail-tags">
 				<?php if ($year) : ?><span><?php echo esc_html($year); ?></span><?php endif; ?>
 				<?php if ($quality) : ?><span><?php echo esc_html($quality); ?></span><?php endif; ?>
+				<?php if ($tmdb_rating !== '' && $tmdb_rating !== false) : ?><span>★ <?php echo esc_html(number_format_i18n((float) $tmdb_rating, 1)); ?>/10 TMDB</span><?php endif; ?>
+				<?php if ($tmdb_runtime) : ?><span><?php echo esc_html($tmdb_runtime . ' min'); ?></span><?php endif; ?>
 				<?php
 				$industries = get_the_terms($post_id, 'p69_industry');
 				if ($industries && !is_wp_error($industries)) :
@@ -70,6 +81,8 @@ get_header();
 		<dl class="p69-info-grid">
 			<?php if ($year) : ?><div><dt><?php esc_html_e('Release year', 'pirate69'); ?></dt><dd><?php echo esc_html($year); ?></dd></div><?php endif; ?>
 			<?php if ($quality) : ?><div><dt><?php esc_html_e('Available quality', 'pirate69'); ?></dt><dd><?php echo esc_html($quality); ?></dd></div><?php endif; ?>
+			<?php if ($tmdb_rating !== '' && $tmdb_rating !== false) : ?><div><dt>TMDB rating</dt><dd><?php echo esc_html(number_format_i18n((float) $tmdb_rating, 1)); ?>/10</dd></div><?php endif; ?>
+			<?php if ($tmdb_runtime) : ?><div><dt>Runtime</dt><dd><?php echo esc_html($tmdb_runtime . ' minutes'); ?></dd></div><?php endif; ?>
 			<?php if ($source_id) : ?><div><dt><?php esc_html_e('Catalog ID', 'pirate69'); ?></dt><dd><?php echo esc_html($source_id); ?></dd></div><?php endif; ?>
 			<div><dt><?php esc_html_e('Added', 'pirate69'); ?></dt><dd><time datetime="<?php echo esc_attr(get_the_date('c')); ?>"><?php echo esc_html(get_the_date()); ?></time></dd></div>
 		</dl>
@@ -83,6 +96,9 @@ get_header();
 		if ($languages && !is_wp_error($languages)) : ?>
 			<div class="p69-term-list"><strong><?php esc_html_e('Languages', 'pirate69'); ?></strong><?php foreach ($languages as $term) : ?><a href="<?php echo esc_url(get_term_link($term)); ?>"><?php echo esc_html($term->name); ?></a><?php endforeach; ?></div>
 		<?php endif; ?>
+		<?php if (is_array($tmdb_genres) && $tmdb_genres) : ?><div class="p69-term-list"><strong>TMDB genres</strong><?php foreach ($tmdb_genres as $genre) : ?><span><?php echo esc_html($genre); ?></span><?php endforeach; ?></div><?php endif; ?>
+		<?php if (is_array($tmdb_directors) && $tmdb_directors) : ?><div class="p69-term-list"><strong>Director</strong><span><?php echo esc_html(implode(', ', $tmdb_directors)); ?></span></div><?php endif; ?>
+		<?php if (is_array($tmdb_cast) && $tmdb_cast) : ?><div class="p69-term-list"><strong>Cast</strong><span><?php echo esc_html(implode(', ', $tmdb_cast)); ?></span></div><?php endif; ?>
 	</section>
 
 	<section id="p69-downloads" class="p69-download-section">
