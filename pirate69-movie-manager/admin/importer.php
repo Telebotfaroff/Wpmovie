@@ -1,305 +1,321 @@
 <?php
 defined('ABSPATH') || exit;
 
+/**
+ * Pirate69 Import Center
+ * Each workflow has its own admin screen: overview, repository, jobs, history and data quality.
+ */
 function pirate69_register_importer_menu() {
-	add_menu_page('Pirate69 Importer','Pirate69 Importer','manage_options','pirate69-importer','pirate69_render_importer','dashicons-database-import',26);
+    add_menu_page('Pirate69 Import Center', 'Pirate69 Importer', 'manage_options', 'pirate69-importer', 'pirate69_render_importer_overview', 'dashicons-database-import', 26);
+    add_submenu_page('pirate69-importer', 'Overview', 'Overview', 'manage_options', 'pirate69-importer', 'pirate69_render_importer_overview');
+    add_submenu_page('pirate69-importer', 'Repository Browser', 'Repository Browser', 'manage_options', 'pirate69-repository-browser', 'pirate69_render_repository_browser');
+    add_submenu_page('pirate69-importer', 'Import Jobs', 'Import Jobs', 'manage_options', 'pirate69-import-jobs', 'pirate69_render_import_jobs');
+    add_submenu_page('pirate69-importer', 'Import History', 'manage_options', 'manage_options', 'pirate69-import-history', 'pirate69_render_import_history');
+    add_submenu_page('pirate69-importer', 'Missing Data', 'Missing Data', 'manage_options', 'pirate69-import-missing', 'pirate69_render_missing_data');
 }
-add_action('admin_menu','pirate69_register_importer_menu');
+add_action('admin_menu', 'pirate69_register_importer_menu');
 
-function pirate69_importer_action() {
-	if (!current_user_can('manage_options')) wp_die('Not allowed.');
-	check_admin_referer('pirate69_importer_action');
-	$action = sanitize_key($_POST['p69_action'] ?? '');
-	if ($action === 'start') {
-		$category = sanitize_key($_POST['category'] ?? '');
-		$job_type = sanitize_key($_POST['job_type'] ?? 'sync');
-		$target = sanitize_text_field(wp_unslash($_POST['target'] ?? ''));
-		$result = pirate69_create_import_job($category, $job_type, $target);
-		$notice = is_wp_error($result) ? $result->get_error_message() : 'Import job #' . absint($result) . ' queued.';
-	} elseif ($action === 'clear_logs') {
-		global $wpdb;
-		$wpdb->query("TRUNCATE TABLE {$wpdb->prefix}p69_import_logs");
-		$notice = 'Recent activity cleared.';
-	} elseif ($action === 'clear_completed') {
-		global $wpdb;
-		$table = $wpdb->prefix . 'p69_import_jobs';
-		$wpdb->query("DELETE FROM {$table} WHERE status IN ('completed','failed','cancelled')");
-		$notice = 'Finished job history cleared. Active jobs were kept.';
-	} else {
-		$job_id = absint($_POST['job_id'] ?? 0);
-		global $wpdb; $table = $wpdb->prefix . 'p69_import_jobs';
-		$job = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d",$job_id),ARRAY_A);
-		if ($job && in_array($action,array('pause','resume','retry','cancel'),true)) {
-			if ($action === 'pause') $wpdb->update($table,array('status'=>'paused'),array('id'=>$job_id));
-			if ($action === 'resume') { $wpdb->update($table,array('status'=>'pending'),array('id'=>$job_id)); pirate69_schedule_job($job_id,5); }
-			if ($action === 'retry') { $wpdb->update($table,array('status'=>'pending'),array('id'=>$job_id)); pirate69_schedule_job($job_id,5); }
-			if ($action === 'cancel') { $wpdb->update($table,array('status'=>'cancelled'),array('id'=>$job_id)); }
-			$notice = 'Job updated.';
-		} else $notice = 'Job not found.';
-	}
-	set_transient('pirate69_importer_notice', $notice, 30);
-	wp_safe_redirect(admin_url('admin.php?page=pirate69-importer')); exit;
+function pirate69_importer_enqueue($hook) {
+    if (false === strpos((string) $hook, 'pirate69')) return;
+    wp_enqueue_style('pirate69-admin', P69MM_URL . 'assets/admin.css', array(), P69MM_VERSION);
+    wp_enqueue_script('pirate69-admin', P69MM_URL . 'assets/admin.js', array(), P69MM_VERSION, true);
+    wp_localize_script('pirate69-admin', 'P69Importer', array(
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'workerNonce' => wp_create_nonce('pirate69_import_worker'),
+        'posterNonce' => wp_create_nonce('pirate69_poster_worker'),
+        'strings' => array('working' => 'Updating import status…', 'failed' => 'Unable to refresh job status.')
+    ));
 }
-add_action('admin_post_pirate69_importer_action','pirate69_importer_action');
+add_action('admin_enqueue_scripts', 'pirate69_importer_enqueue');
+
+function pirate69_importer_url($page, $args = array()) {
+    return add_query_arg(array_merge(array('page' => $page), $args), admin_url('admin.php'));
+}
+function pirate69_importer_header($title, $subtitle, $active = 'overview') {
+    $nav = array(
+        'overview' => array('Overview', 'pirate69-importer'),
+        'repository' => array('Repository Browser', 'pirate69-repository-browser'),
+        'jobs' => array('Import Jobs', 'pirate69-import-jobs'),
+        'history' => array('Import History', 'pirate69-import-history'),
+        'missing' => array('Missing Data', 'pirate69-import-missing'),
+    );
+    ?>
+    <div class="wrap p69-admin">
+      <div class="p69-hero">
+        <div class="p69-hero-copy"><span class="p69-eyebrow">PIRATE69 · CATALOG CONTROL CENTER</span><h1><?php echo esc_html($title); ?></h1><p><?php echo esc_html($subtitle); ?></p></div>
+        <div class="p69-hero-mark" aria-hidden="true">P69</div>
+      </div>
+      <nav class="p69-nav" aria-label="Importer sections">
+      <?php foreach ($nav as $key => $item): ?>
+        <a class="p69-nav-link <?php echo $active === $key ? 'is-active' : ''; ?>" href="<?php echo esc_url(pirate69_importer_url($item[1])); ?>"><?php echo esc_html($item[0]); ?></a>
+      <?php endforeach; ?>
+      </nav>
+      <?php $notice = get_transient('pirate69_importer_notice'); if ($notice) { delete_transient('pirate69_importer_notice'); ?>
+        <div class="notice notice-info is-dismissible"><p><?php echo esc_html($notice); ?></p></div>
+      <?php } ?>
+    <?php
+}
+function pirate69_importer_footer() { echo '</div>'; }
+
+function pirate69_importer_db_stats() {
+    global $wpdb;
+    $jobs = $wpdb->prefix . 'p69_import_jobs';
+    $map = $wpdb->prefix . 'p69_source_map';
+    $stats = array('imported' => 0, 'active' => 0, 'failed' => 0, 'completed' => 0, 'recent' => 0);
+    $stats['imported'] = (int) $wpdb->get_var("SELECT COUNT(DISTINCT post_id) FROM {$map}");
+    $stats['active'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$jobs} WHERE status IN ('pending','running','paused')");
+    $stats['failed'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$jobs} WHERE status='failed'");
+    $stats['completed'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$jobs} WHERE status='completed'");
+    $stats['recent'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$jobs} WHERE created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)");
+    return $stats;
+}
+
+/** Fetch all lightweight indexes once per request and calculate repository coverage/quality. */
+function pirate69_repository_stats($force = false) {
+    $cached = $force ? false : get_transient('p69_repository_stats');
+    if (is_array($cached)) return $cached;
+    global $wpdb;
+    $map_table = $wpdb->prefix . 'p69_source_map';
+    $stats = array('total' => 0, 'imported' => 0, 'missing' => 0, 'incomplete' => 0, 'categories' => array(), 'errors' => array());
+    foreach (pirate69_source_categories() as $key => $category) {
+        $index = pirate69_fetch_json($category['index']);
+        if (is_wp_error($index)) {
+            $stats['errors'][$key] = $index->get_error_message();
+            $stats['categories'][$key] = array('label' => $category['label'], 'total' => 0, 'imported' => 0, 'missing' => 0, 'incomplete' => 0);
+            continue;
+        }
+        $rows = is_array($index) ? $index : array();
+        $ids = array();
+        $incomplete = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) { $incomplete++; continue; }
+            $id = sanitize_text_field($row['id'] ?? '');
+            if ($id !== '') $ids[$id] = true;
+            if ($id === '' || trim((string)($row['title'] ?? '')) === '' || empty($row['poster']) || empty($row['chunk'])) $incomplete++;
+        }
+        $total = count($ids);
+        $imported = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$map_table} WHERE category=%s", $key));
+        $imported = min($total, $imported);
+        $missing = max(0, $total - $imported);
+        $stats['categories'][$key] = array('label' => $category['label'], 'total' => $total, 'imported' => $imported, 'missing' => $missing, 'incomplete' => $incomplete);
+        $stats['total'] += $total;
+        $stats['imported'] += $imported;
+        $stats['missing'] += $missing;
+        $stats['incomplete'] += $incomplete;
+    }
+    set_transient('p69_repository_stats', $stats, 5 * MINUTE_IN_SECONDS);
+    return $stats;
+}
+
+function pirate69_importer_start_form($category, $type, $target, $label, $class = 'button button-primary') {
+    ?>
+    <form class="p69-inline-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+      <?php wp_nonce_field('pirate69_importer_action'); ?>
+      <input type="hidden" name="action" value="pirate69_importer_action">
+      <input type="hidden" name="p69_action" value="start">
+      <input type="hidden" name="category" value="<?php echo esc_attr($category); ?>">
+      <input type="hidden" name="job_type" value="<?php echo esc_attr($type); ?>">
+      <input type="hidden" name="target" value="<?php echo esc_attr($target); ?>">
+      <button class="<?php echo esc_attr($class); ?>"><?php echo esc_html($label); ?></button>
+    </form>
+    <?php
+}
+function pirate69_importer_action() {
+    if (!current_user_can('manage_options')) wp_die('Not allowed.');
+    check_admin_referer('pirate69_importer_action');
+    $action = sanitize_key($_POST['p69_action'] ?? '');
+    $redirect = sanitize_key($_POST['return_page'] ?? 'pirate69-import-jobs');
+    $allowed_pages = array('pirate69-importer','pirate69-repository-browser','pirate69-import-jobs','pirate69-import-history','pirate69-import-missing');
+    if (!in_array($redirect, $allowed_pages, true)) $redirect = 'pirate69-import-jobs';
+    if ($action === 'start') {
+        $category = sanitize_key($_POST['category'] ?? '');
+        $type = sanitize_key($_POST['job_type'] ?? 'sync');
+        $target = sanitize_text_field(wp_unslash($_POST['target'] ?? ''));
+        $result = pirate69_create_import_job($category, $type, $target);
+        $notice = is_wp_error($result) ? $result->get_error_message() : 'Import job #' . absint($result) . ' queued.';
+        delete_transient('p69_repository_stats');
+    } elseif ($action === 'clear_logs') {
+        global $wpdb; $wpdb->query("TRUNCATE TABLE {$wpdb->prefix}p69_import_logs"); $notice = 'Import activity cleared.';
+    } elseif ($action === 'clear_completed') {
+        global $wpdb; $wpdb->query("DELETE FROM {$wpdb->prefix}p69_import_jobs WHERE status IN ('completed','failed','cancelled')"); $notice = 'Finished jobs cleared. Active jobs were kept.';
+    } else {
+        $job_id = absint($_POST['job_id'] ?? 0);
+        global $wpdb; $table = $wpdb->prefix . 'p69_import_jobs';
+        $job = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $job_id), ARRAY_A);
+        if (!$job || !in_array($action, array('pause','resume','retry','cancel'), true)) $notice = 'Job not found.';
+        else {
+            if ($action === 'pause') $wpdb->update($table, array('status'=>'paused','updated_at'=>current_time('mysql', true)), array('id'=>$job_id));
+            if ($action === 'resume' || $action === 'retry') {
+                $wpdb->update($table, array('status'=>'pending','updated_at'=>current_time('mysql', true)), array('id'=>$job_id));
+                pirate69_schedule_job($job_id, 5);
+            }
+            if ($action === 'cancel') $wpdb->update($table, array('status'=>'cancelled','updated_at'=>current_time('mysql', true)), array('id'=>$job_id));
+            $notice = 'Job #' . $job_id . ' updated.';
+        }
+    }
+    set_transient('pirate69_importer_notice', $notice, 30);
+    wp_safe_redirect(pirate69_importer_url($redirect)); exit;
+}
+add_action('admin_post_pirate69_importer_action', 'pirate69_importer_action');
 
 function pirate69_ajax_import_worker() {
-	if (!current_user_can('manage_options')) wp_send_json_error(array('message' => 'Not allowed.'), 403);
-	check_ajax_referer('pirate69_import_worker', 'nonce');
-	$job_id = absint($_POST['job_id'] ?? 0);
-	global $wpdb;
-	$table = $wpdb->prefix . 'p69_import_jobs';
-	$before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $job_id), ARRAY_A);
-	if (!$before) wp_send_json_error(array('message' => 'Job not found.'), 404);
-	if (in_array($before['status'], array('pending', 'running'), true)) pirate69_process_import_job($job_id);
-	$job = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $job_id), ARRAY_A);
-	wp_send_json_success(array('id' => $job_id, 'status' => $job['status'], 'total' => (int) $job['total_items'], 'processed' => (int) $job['processed_items'], 'created' => (int) $job['created_count'], 'updated' => (int) $job['updated_count'], 'skipped' => (int) $job['skipped_count'], 'errors' => (int) $job['error_count']));
+    if (!current_user_can('manage_options')) wp_send_json_error(array('message'=>'Not allowed.'), 403);
+    check_ajax_referer('pirate69_import_worker', 'nonce');
+    $job_id = absint($_POST['job_id'] ?? 0);
+    global $wpdb; $table = $wpdb->prefix . 'p69_import_jobs';
+    $before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $job_id), ARRAY_A);
+    if (!$before) wp_send_json_error(array('message'=>'Job not found.'), 404);
+    if (in_array($before['status'], array('pending','running'), true)) pirate69_process_import_job($job_id);
+    $job = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $job_id), ARRAY_A);
+    wp_send_json_success(array('id'=>$job_id,'status'=>$job['status'],'total'=>(int)$job['total_items'],'processed'=>(int)$job['processed_items'],'created'=>(int)$job['created_count'],'updated'=>(int)$job['updated_count'],'skipped'=>(int)$job['skipped_count'],'errors'=>(int)$job['error_count']));
 }
 add_action('wp_ajax_pirate69_import_worker', 'pirate69_ajax_import_worker');
 
-
 function pirate69_ajax_poster_worker() {
-	if (!current_user_can('manage_options')) wp_send_json_error(array('message' => 'Not allowed.'), 403);
-	check_ajax_referer('pirate69_poster_worker', 'nonce');
-	pirate69_process_poster_queue(1);
-	global $wpdb;
-	$table = $wpdb->prefix . 'p69_poster_queue';
-	$counts = $wpdb->get_results("SELECT status, COUNT(*) AS amount FROM {$table} GROUP BY status", ARRAY_A);
-	$stats = array('queued' => 0, 'processing' => 0, 'completed' => 0, 'failed' => 0);
-	foreach ((array) $counts as $row) {
-		if (isset($stats[$row['status']])) $stats[$row['status']] = (int) $row['amount'];
-	}
-	wp_send_json_success($stats);
+    if (!current_user_can('manage_options')) wp_send_json_error(array('message'=>'Not allowed.'), 403);
+    check_ajax_referer('pirate69_poster_worker', 'nonce');
+    pirate69_process_poster_queue(1);
+    global $wpdb; $table = $wpdb->prefix . 'p69_poster_queue';
+    $counts = $wpdb->get_results("SELECT status, COUNT(*) AS amount FROM {$table} GROUP BY status", ARRAY_A);
+    $stats = array('queued'=>0,'processing'=>0,'completed'=>0,'failed'=>0);
+    foreach ((array)$counts as $row) if (isset($stats[$row['status']])) $stats[$row['status']] = (int)$row['amount'];
+    wp_send_json_success($stats);
 }
 add_action('wp_ajax_pirate69_poster_worker', 'pirate69_ajax_poster_worker');
 
-
-
-
-
-function pirate69_render_job_action($category, $job_type, $target, $label) {
-	?>
-	<form class="p69-inline-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-		<?php wp_nonce_field('pirate69_importer_action'); ?>
-		<input type="hidden" name="action" value="pirate69_importer_action">
-		<input type="hidden" name="p69_action" value="start">
-		<input type="hidden" name="category" value="<?php echo esc_attr($category); ?>">
-		<input type="hidden" name="job_type" value="<?php echo esc_attr($job_type); ?>">
-		<input type="hidden" name="target" value="<?php echo esc_attr($target); ?>">
-		<button class="button button-small"><?php echo esc_html($label); ?></button>
-	</form>
-	<?php
+function pirate69_render_importer_overview() {
+    if (!current_user_can('manage_options')) return;
+    $remote = pirate69_repository_stats();
+    $local = pirate69_importer_db_stats();
+    pirate69_importer_header('Importer Overview', 'A live view of the GitHub catalog and your website import coverage.', 'overview');
+    ?>
+    <div class="p69-stat-grid p69-stat-grid-five">
+      <div class="p69-stat-card"><span class="p69-stat-label">Repository records</span><strong><?php echo number_format_i18n($remote['total']); ?></strong><small>Across all source catalogs</small></div>
+      <div class="p69-stat-card"><span class="p69-stat-label">Imported on website</span><strong><?php echo number_format_i18n($local['imported']); ?></strong><small>Mapped source records</small></div>
+      <div class="p69-stat-card"><span class="p69-stat-label">Not imported yet</span><strong><?php echo number_format_i18n($remote['missing']); ?></strong><small>Available in GitHub</small></div>
+      <div class="p69-stat-card"><span class="p69-stat-label">Active processes</span><strong><?php echo number_format_i18n($local['active']); ?></strong><small>Pending, running or paused</small></div>
+      <div class="p69-stat-card"><span class="p69-stat-label">Failed jobs</span><strong><?php echo number_format_i18n($local['failed']); ?></strong><small>Review and retry</small></div>
+    </div>
+    <div class="p69-dashboard-grid">
+      <section class="p69-admin-panel"><div class="p69-panel-heading"><div><span class="p69-section-kicker">SOURCE BREAKDOWN</span><h2>Repository coverage</h2></div><a class="button" href="<?php echo esc_url(pirate69_importer_url('pirate69-repository-browser')); ?>">Browse repository</a></div>
+      <?php foreach ($remote['categories'] as $key=>$cat): $percent=$cat['total']?min(100,round($cat['imported']/$cat['total']*100)):0; ?>
+        <div class="p69-coverage-row"><div><strong><?php echo esc_html($cat['label']); ?></strong><span><?php echo number_format_i18n($cat['imported']); ?> / <?php echo number_format_i18n($cat['total']); ?> imported</span></div><div class="p69-coverage-track"><i style="width:<?php echo esc_attr($percent); ?>%"></i></div><b><?php echo esc_html($percent); ?>%</b></div>
+        <?php if (isset($remote['errors'][$key])): ?><p class="p69-muted p69-error-text"><?php echo esc_html($remote['errors'][$key]); ?></p><?php endif; ?>
+      <?php endforeach; ?>
+      <p class="p69-footnote">Repository statistics are cached for five minutes. Use the refresh action to recalculate them.</p>
+      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('p69_refresh_repo_stats'); ?><input type="hidden" name="action" value="p69_refresh_repo_stats"><button class="button">Refresh repository totals</button></form>
+      </section>
+      <section class="p69-admin-panel"><span class="p69-section-kicker">QUICK ACCESS</span><h2>Import operations</h2><p>Jump directly to the workflow you need. Each section has its own workspace.</p>
+        <a class="p69-action-card" href="<?php echo esc_url(pirate69_importer_url('pirate69-repository-browser')); ?>"><span class="dashicons dashicons-search"></span><span><strong>Search repository</strong><small>Find titles and queue individual imports</small></span></a>
+        <a class="p69-action-card" href="<?php echo esc_url(pirate69_importer_url('pirate69-import-jobs')); ?>"><span class="dashicons dashicons-controls-play"></span><span><strong>Monitor active jobs</strong><small>Progress, pause, resume and cancel</small></span></a>
+        <a class="p69-action-card" href="<?php echo esc_url(pirate69_importer_url('pirate69-import-history')); ?>"><span class="dashicons dashicons-backup"></span><span><strong>Recent imports</strong><small>Completed, skipped and failed activity</small></span></a>
+        <a class="p69-action-card" href="<?php echo esc_url(pirate69_importer_url('pirate69-import-missing')); ?>"><span class="dashicons dashicons-warning"></span><span><strong>Missing data</strong><small>Find missing imports and incomplete source rows</small></span></a>
+      </section>
+    </div>
+    <?php if (!empty($remote['incomplete'])): ?><div class="p69-admin-panel"><h2>Source data quality</h2><p><strong><?php echo number_format_i18n($remote['incomplete']); ?></strong> repository records have one or more missing index fields (ID, title, poster or chunk). Review Missing Data for details.</p></div><?php endif; ?>
+    <?php pirate69_importer_footer();
 }
 
-function pirate69_render_importer() {
-	if (!current_user_can('manage_options')) return;
-	global $wpdb;
-	$jobs_table = $wpdb->prefix . 'p69_import_jobs';
-	$logs_table = $wpdb->prefix . 'p69_import_logs';
-	$job_status = sanitize_key($_GET['job_status'] ?? 'all');
-	$job_catalog = sanitize_key($_GET['job_catalog'] ?? 'all');
-	$job_where = array('1=1');
-	$job_args = array();
-	if (in_array($job_status, array('pending','running','paused','completed','failed','cancelled'), true)) { $job_where[] = 'status=%s'; $job_args[] = $job_status; }
-	if ($job_catalog !== 'all' && preg_match('/^[a-z0-9_-]+$/', $job_catalog)) { $job_where[] = 'category=%s'; $job_args[] = $job_catalog; }
-	$job_sql = "SELECT * FROM {$jobs_table} WHERE " . implode(' AND ', $job_where) . " ORDER BY id DESC LIMIT 50";
-	$jobs = $job_args ? $wpdb->get_results($wpdb->prepare($job_sql, $job_args), ARRAY_A) : $wpdb->get_results($job_sql, ARRAY_A);
-	$log_level = sanitize_key($_GET['log_level'] ?? 'all');
-	$log_search = sanitize_text_field(wp_unslash($_GET['log_search'] ?? ''));
-	$log_where = array('1=1'); $log_args = array();
-	if (in_array($log_level, array('info','warning','error'), true)) { $log_where[] = 'level=%s'; $log_args[] = $log_level; }
-	if ($log_search !== '') { $log_where[] = 'message LIKE %s'; $log_args[] = '%' . $wpdb->esc_like($log_search) . '%'; }
-	$log_sql = "SELECT * FROM {$logs_table} WHERE " . implode(' AND ', $log_where) . " ORDER BY id DESC LIMIT 50";
-	$logs = $log_args ? $wpdb->get_results($wpdb->prepare($log_sql, $log_args), ARRAY_A) : $wpdb->get_results($log_sql, ARRAY_A);
-	$notice = get_transient('pirate69_importer_notice');
-	if ($notice) delete_transient('pirate69_importer_notice');
-	$categories = pirate69_source_categories();
-	$search_category = sanitize_key($_GET['p69_category'] ?? 'hollywood');
-	if (!isset($categories[$search_category])) $search_category = 'hollywood';
-	$search_query = sanitize_text_field(wp_unslash($_GET['p69_search'] ?? ''));
-	$search_results = null;
-	$search_error = '';
-	if ('' !== $search_query) {
-		$search_results = pirate69_search_catalog($search_category, $search_query, 50);
-		if (is_wp_error($search_results)) { $search_error = $search_results->get_error_message(); $search_results = array(); }
-	}
-	$has_active = false; $active_count = 0; $completed_count = 0; $failed_count = 0;
-	foreach ((array)$jobs as $j) {
-		if (in_array($j['status'],array('pending','running','paused'),true)) { $has_active = true; $active_count++; }
-		if ($j['status'] === 'completed') $completed_count++;
-		if ($j['status'] === 'failed') $failed_count++;
-	}
-	$total_imported = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} p INNER JOIN {$wpdb->postmeta} pm ON pm.post_id=p.ID AND pm.meta_key='_p69_source_id' WHERE p.post_type IN ('p69_movie','p69_tv_show') AND p.post_status NOT IN ('trash','auto-draft')");
-	?>
-	<div class="wrap p69-admin">
-	<div class="p69-hero">
-		<div class="p69-hero-copy"><span class="p69-eyebrow">PIRATE69 · CATALOG CONTROL CENTER</span><h1>Pirate69 <span>Movie Manager</span></h1>
-		<p>Search, select and import exactly what you need. Your catalog stays in control, one movie or chunk at a time.</p></div>
-		<div class="p69-hero-mark" aria-hidden="true">P69</div>
-	</div>
-	<div class="p69-stat-grid">
-		<div class="p69-stat-card"><span class="p69-stat-label">Imported titles</span><strong><?php echo number_format_i18n($total_imported); ?></strong><small>Movies &amp; TV series</small></div>
-		<div class="p69-stat-card"><span class="p69-stat-label">Active jobs</span><strong><?php echo number_format_i18n($active_count); ?></strong><small>Pending, running or paused</small></div>
-		<div class="p69-stat-card"><span class="p69-stat-label">Completed jobs</span><strong><?php echo number_format_i18n($completed_count); ?></strong><small>Recent job history</small></div>
-		<div class="p69-stat-card"><span class="p69-stat-label">Failed jobs</span><strong><?php echo number_format_i18n($failed_count); ?></strong><small>Need attention</small></div>
-	</div>
-	<?php if($notice): ?><div class="notice notice-info is-dismissible"><p><?php echo esc_html($notice); ?></p></div><?php endif; ?>
-	<nav class="p69-tabs" aria-label="Movie manager sections">
-		<button type="button" class="p69-tab is-active" data-p69-tab="import">Import catalog</button>
-		<button type="button" class="p69-tab" data-p69-tab="jobs">Import jobs <span><?php echo number_format_i18n($active_count); ?></span></button>
-		<button type="button" class="p69-tab" data-p69-tab="posters">Posters &amp; activity</button>
-	</nav>
-	<div class="p69-tab-panel is-active" data-p69-panel="import">
-	<div class="p69-section-heading"><div><span class="p69-section-kicker">DISCOVER</span><h2>Find something to import</h2><p>Search the master index first. Detailed chunk data is fetched only after you choose an import.</p></div><span class="p69-step">01</span></div>
-	<div class="p69-admin-panel p69-search-panel">
-		<h3><span class="dashicons dashicons-search"></span> Source catalog search</h3>
-		<form class="p69-search-form" method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
-			<input type="hidden" name="page" value="pirate69-importer">
-			<label for="p69-search-category">Catalog</label>
-			<select id="p69-search-category" name="p69_category"><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($search_category,$key); ?>><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select>
-			<input type="search" name="p69_search" value="<?php echo esc_attr($search_query); ?>" placeholder="Movie title or source ID" class="regular-text" required>
-			<button class="button button-primary">Search database</button>
-		</form>
-		<?php if ('' !== $search_query): ?>
-			<?php if ($search_error): ?><div class="notice notice-error inline"><p><?php echo esc_html($search_error); ?></p></div>
-			<?php elseif ($search_results): ?>
-				<p><?php echo esc_html(count($search_results)); ?> matching results (up to 50 shown).</p>
-				<table class="widefat striped"><thead><tr><th>Title</th><th>Year</th><th>Type</th><th>Chunk</th><th>Actions</th></tr></thead><tbody>
-				<?php foreach($search_results as $item): ?><tr>
-					<td><strong><?php echo esc_html($item['title']); ?></strong><br><code><?php echo esc_html($item['id']); ?></code></td>
-					<td><?php echo esc_html($item['year']); ?></td>
-					<td><?php echo !empty($item['isSeries']) ? 'Series' : 'Movie'; ?></td>
-					<td>#<?php echo absint($item['chunk']); ?></td>
-					<td><?php pirate69_render_job_action($search_category,'movie',$item['id'],'Import this movie'); ?><?php pirate69_render_job_action($search_category,'chunk',(string)$item['chunk'],'Import chunk #'.$item['chunk']); ?></td>
-				</tr><?php endforeach; ?>
-				</tbody></table>
-			<?php else: ?><p>No matches found in this catalog index.</p><?php endif; ?>
-		<?php endif; ?>
-	</div>
+function pirate69_render_repository_browser() {
+    if (!current_user_can('manage_options')) return;
+    $categories=pirate69_source_categories();
+    $category=sanitize_key($_GET['catalog']??'hollywood'); if(!isset($categories[$category]))$category='hollywood';
+    $query=sanitize_text_field(wp_unslash($_GET['q']??''));
+    $results=array();$error='';
+    if($query!==''){ $results=pirate69_search_catalog($category,$query,100); if(is_wp_error($results)){$error=$results->get_error_message();$results=array();} }
+    pirate69_importer_header('Repository Browser','Search the live GitHub index. Only selected records are fetched and imported.','repository');
+    ?>
+    <div class="p69-admin-panel p69-search-panel">
+      <form class="p69-search-form" method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
+        <input type="hidden" name="page" value="pirate69-repository-browser">
+        <select name="catalog" aria-label="Catalog"><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($category,$key); ?>><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select>
+        <input type="search" name="q" value="<?php echo esc_attr($query); ?>" placeholder="Search movie title or source ID…" required>
+        <button class="button button-primary">Search GitHub</button>
+      </form>
+      <?php if($query!==''): ?>
+        <?php if($error): ?><div class="notice notice-error inline"><p><?php echo esc_html($error); ?></p></div>
+        <?php elseif(!$results): ?><p class="p69-empty">No matching records found in <?php echo esc_html($categories[$category]['label']); ?>.</p>
+        <?php else: ?><div class="p69-results-heading"><strong><?php echo number_format_i18n(count($results)); ?> results</strong><span>Showing up to 100 matches from the source index</span></div>
+          <div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>Title / source ID</th><th>Year</th><th>Type</th><th>Chunk</th><th>Action</th></tr></thead><tbody>
+          <?php foreach($results as $item): ?><tr><td><strong><?php echo esc_html($item['title']); ?></strong><code><?php echo esc_html($item['id']); ?></code></td><td><?php echo esc_html($item['year']?:'—'); ?></td><td><?php echo !empty($item['isSeries'])?'TV series':'Movie'; ?></td><td><?php echo $item['chunk']?'#'.absint($item['chunk']):'—'; ?></td><td><?php pirate69_importer_start_form($category,'movie',$item['id'],'Import record'); ?></td></tr><?php endforeach; ?>
+          </tbody></table></div>
+        <?php endif; ?>
+      <?php else: ?><div class="p69-empty-state"><span class="dashicons dashicons-search"></span><h2>Search your source catalog</h2><p>Search by movie title or source ID. Results come directly from the selected GitHub index.</p></div><?php endif; ?>
+    </div>
+    <?php pirate69_importer_footer();
+}
 
-	<div class="p69-section-heading"><div><span class="p69-section-kicker">TARGETED IMPORT</span><h2>Choose your import method</h2><p>Bring in a single movie or a complete source chunk. No need to sync the entire database.</p></div><span class="p69-step">02</span></div>
-	<div class="p69-tool-grid"><div class="p69-admin-panel p69-tool-card"><div class="p69-tool-icon"><span class="dashicons dashicons-screenoptions"></span></div><h3>Import by chunk</h3><p>Import every indexed record belonging to one chunk number.</p>
-		<form class="p69-chunk-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-			<?php wp_nonce_field('pirate69_importer_action'); ?>
-			<input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="start"><input type="hidden" name="job_type" value="chunk">
-			<label for="p69-chunk-category">Catalog</label>
-			<select id="p69-chunk-category" name="category"><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select>
-			<label for="p69-chunk-number">Chunk number</label>
-			<input id="p69-chunk-number" type="number" name="target" min="1" step="1" required placeholder="e.g. 12">
-			<button class="button button-primary">Import this chunk only</button>
-		</form>
-		<p class="description">Only the selected chunk is processed. All other chunks remain untouched.</p>
-	</div>
+function pirate69_render_import_jobs() {
+    if (!current_user_can('manage_options')) return;
+    global $wpdb; $table=$wpdb->prefix.'p69_import_jobs'; $categories=pirate69_source_categories();
+    $status=sanitize_key($_GET['status']??'all');$category=sanitize_key($_GET['catalog']??'all');
+    $where=array('1=1');$args=array();
+    if(in_array($status,array('pending','running','paused','completed','failed','cancelled'),true)){$where[]='status=%s';$args[]=$status;}
+    if(isset($categories[$category])){$where[]='category=%s';$args[]=$category;}
+    $sql="SELECT * FROM {$table} WHERE ".implode(' AND ',$where)." ORDER BY id DESC LIMIT 100";
+    $jobs=$args?$wpdb->get_results($wpdb->prepare($sql,$args),ARRAY_A):$wpdb->get_results($sql,ARRAY_A);
+    $active_ids=array();
+    foreach($jobs as $job)if(in_array($job['status'],array('pending','running'),true))$active_ids[]=(int)$job['id'];
+    pirate69_importer_header('Import Jobs','Monitor active processes and control each job independently.','jobs');
+    ?>
+    <div class="p69-jobs-toolbar"><form method="get"><input type="hidden" name="page" value="pirate69-import-jobs"><select name="status"><option value="all">All statuses</option><?php foreach(array('pending','running','paused','completed','failed','cancelled') as $s): ?><option value="<?php echo esc_attr($s); ?>" <?php selected($status,$s); ?>><?php echo esc_html(ucfirst($s)); ?></option><?php endforeach; ?></select><select name="catalog"><option value="all">All catalogs</option><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($category,$key); ?>><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select><button class="button">Filter jobs</button></form>
+    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Clear completed, failed and cancelled jobs?');"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="clear_completed"><input type="hidden" name="return_page" value="pirate69-import-jobs"><button class="button">Clear finished jobs</button></form></div>
+    <div class="p69-admin-panel"><div class="p69-panel-heading"><h2>Job queue</h2><span><?php echo number_format_i18n(count($jobs)); ?> recent jobs</span></div><div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>Job</th><th>Catalog / target</th><th>Status</th><th>Progress</th><th>Created / updated / skipped</th><th>Errors</th><th>Controls</th></tr></thead><tbody>
+    <?php if($jobs):foreach($jobs as $job):$total=(int)$job['total_items'];$done=(int)$job['processed_items'];$pct=$total?min(100,(int)floor($done/$total*100)):0;$state=json_decode($job['payload']??'',true);$state=is_array($state)?$state:array();$chunks=$state['chunks']??array();$pos=absint($state['chunk_pos']??0);$current=isset($chunks[$pos])?absint($chunks[$pos]):0; ?>
+    <tr data-p69-job="<?php echo absint($job['id']); ?>"><td><strong>#<?php echo absint($job['id']); ?></strong><small><?php echo esc_html($job['created_at']); ?></small></td><td><?php echo esc_html(($categories[$job['category']]['label']??$job['category']).' · '.$job['job_type']); ?><?php if(!empty($state['target'])): ?><code><?php echo esc_html($state['target']); ?></code><?php endif; ?><?php if($current): ?><small>Chunk #<?php echo $current; ?> · <?php echo $pos+1; ?>/<?php echo count($chunks); ?></small><?php endif; ?></td><td><span class="p69-status p69-status-<?php echo esc_attr($job['status']); ?>"><?php echo esc_html(ucfirst($job['status'])); ?></span><small><?php echo esc_html($state['phase']??''); ?></small></td><td><progress max="100" value="<?php echo esc_attr($pct); ?>"></progress><span class="p69-progress-label"><?php echo number_format_i18n($done); ?> / <?php echo $total?number_format_i18n($total):'—'; ?> · <?php echo $pct; ?>%</span></td><td><?php echo absint($job['created_count']); ?> / <?php echo absint($job['updated_count']); ?> / <?php echo absint($job['skipped_count']); ?></td><td><?php echo absint($job['error_count']); ?></td><td>
+    <?php foreach(array('pause'=>'Pause','resume'=>'Resume','retry'=>'Retry','cancel'=>'Cancel') as $action=>$label):if(($action==='pause'&&!in_array($job['status'],array('pending','running'),true))||($action==='resume'&&$job['status']!=='paused')||($action==='retry'&&$job['status']!=='failed')||($action==='cancel'&&!in_array($job['status'],array('pending','running','paused'),true)))continue; ?>
+    <form class="p69-inline-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="<?php echo esc_attr($action); ?>"><input type="hidden" name="job_id" value="<?php echo absint($job['id']); ?>"><input type="hidden" name="return_page" value="pirate69-import-jobs"><button class="button button-small"><?php echo esc_html($label); ?></button></form><?php endforeach; ?></td></tr>
+    <?php endforeach;else:?><tr><td colspan="7">No import jobs found.</td></tr><?php endif; ?></tbody></table></div></div>
+    <?php if($active_ids): ?><div class="p69-worker-status" data-p69-worker data-job-ids="<?php echo esc_attr(wp_json_encode($active_ids)); ?>">Live worker connected · processing queued jobs…</div><?php endif; ?>
+    <?php pirate69_importer_footer();
+}
 
-	<div class="p69-admin-panel p69-tool-card p69-bulk-card"><div class="p69-tool-icon"><span class="dashicons dashicons-database"></span></div><h3>Quick feeds &amp; full sync</h3><p>Use homepage feeds for latest additions, or preview the full catalog before a large sync.</p>
-		<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-			<?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="start">
-			<label for="p69-bulk-category">Catalog</label> <select id="p69-bulk-category" name="category"><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>"><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select>
-			<button class="button" name="job_type" value="homepage">Import homepage feed</button>
-			<button class="button" name="job_type" value="preview">Preview full catalog</button>
-			<button class="button" name="job_type" value="sync" onclick="return confirm('This queues every chunk in the selected catalog. Continue?')">Queue full catalog sync</button>
-		</form>
-	</div></div>
+function pirate69_render_import_history() {
+    if (!current_user_can('manage_options')) return;
+    global $wpdb; $jobs_table=$wpdb->prefix.'p69_import_jobs';$logs_table=$wpdb->prefix.'p69_import_logs';
+    $level=sanitize_key($_GET['level']??'all');$search=sanitize_text_field(wp_unslash($_GET['q']??''));
+    $where=array('1=1');$args=array();if(in_array($level,array('info','warning','error','success'),true)){$where[]='level=%s';$args[]=$level;}if($search!==''){$where[]='message LIKE %s';$args[]='%'.$wpdb->esc_like($search).'%';}
+    $sql="SELECT * FROM {$logs_table} WHERE ".implode(' AND ',$where)." ORDER BY id DESC LIMIT 100";$logs=$args?$wpdb->get_results($wpdb->prepare($sql,$args),ARRAY_A):$wpdb->get_results($sql,ARRAY_A);
+    $recent=$wpdb->get_results("SELECT * FROM {$jobs_table} ORDER BY id DESC LIMIT 20",ARRAY_A);
+    pirate69_importer_header('Import History','Recent successful imports, skipped records, errors and job outcomes.','history');
+    ?>
+    <div class="p69-admin-panel"><div class="p69-panel-heading"><h2>Recent import jobs</h2><a href="<?php echo esc_url(pirate69_importer_url('pirate69-import-jobs')); ?>">View all jobs →</a></div><div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>Job</th><th>Catalog</th><th>Status</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Failed records</th><th>Finished / updated</th></tr></thead><tbody><?php foreach($recent as $job): ?><tr><td>#<?php echo absint($job['id']); ?> · <?php echo esc_html($job['job_type']); ?></td><td><?php echo esc_html($job['category']); ?></td><td><span class="p69-status p69-status-<?php echo esc_attr($job['status']); ?>"><?php echo esc_html($job['status']); ?></span></td><td><?php echo absint($job['created_count']); ?></td><td><?php echo absint($job['updated_count']); ?></td><td><?php echo absint($job['skipped_count']); ?></td><td><?php echo absint($job['error_count']); ?></td><td><?php echo esc_html($job['updated_at']); ?></td></tr><?php endforeach; ?></tbody></table></div></div>
+    <div class="p69-admin-panel"><div class="p69-panel-heading"><h2>Activity log</h2><span>Latest 100 events</span></div><form class="p69-log-filters" method="get"><input type="hidden" name="page" value="pirate69-import-history"><select name="level"><option value="all">All events</option><?php foreach(array('success','info','warning','error') as $v): ?><option value="<?php echo esc_attr($v); ?>" <?php selected($level,$v); ?>><?php echo esc_html(ucfirst($v)); ?></option><?php endforeach; ?></select><input type="search" name="q" value="<?php echo esc_attr($search); ?>" placeholder="Search import activity"><button class="button">Filter</button></form><div class="p69-log-list"><?php if($logs):foreach($logs as $log):$context=json_decode($log['context']??'',true); ?><article class="p69-log-entry"><span class="p69-log-dot p69-log-<?php echo esc_attr($log['level']); ?>"></span><div><strong><?php echo esc_html($log['message']); ?></strong><p><?php echo esc_html($log['created_at']); ?> · Job #<?php echo absint($log['job_id']); ?><?php if(!empty($context['source_id'])): ?> · <?php echo esc_html($context['source_id']); ?><?php endif; ?></p><?php if(!empty($context['error'])): ?><small><?php echo esc_html($context['error']); ?></small><?php endif; ?></div></article><?php endforeach;else:?><p>No activity matches these filters.</p><?php endif; ?></div></div>
+    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Clear all importer activity logs?');"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="clear_logs"><input type="hidden" name="return_page" value="pirate69-import-history"><button class="button">Clear activity logs</button></form>
+    <?php pirate69_importer_footer();
+}
 
-	</div>
-	<div class="p69-tab-panel" data-p69-panel="jobs">
-	<div class="p69-section-heading"><div><span class="p69-section-kicker">MONITOR</span><h2>Import activity</h2><p>Track progress, inspect results and control running jobs.</p></div><span class="p69-live-indicator">● LIVE</span></div>
-	<div class="p69-admin-panel p69-jobs-panel"><div class="p69-panel-heading"><h3>Recent jobs</h3><span>Last 12 jobs</span></div><div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>ID</th><th>Catalog / target</th><th>Status</th><th>Progress</th><th>Results</th><th>Errors</th><th>Actions</th></tr></thead><tbody>
-	<?php if($jobs): foreach($jobs as $job):
-		$total=(int)$job['total_items'];$done=(int)$job['processed_items'];$pct=$total?min(100,(int)floor(($done/$total)*100)):0;
-		$state=json_decode($job['payload']??'',true);$state=is_array($state)?$state:array();$chunks=$state['chunks']??array();$chunk_pos=absint($state['chunk_pos']??0);$current_chunk=isset($chunks[$chunk_pos])?absint($chunks[$chunk_pos]):0;
-		$target_label=in_array($job['job_type'],array('chunk','movie'),true)?' · '.$job['job_type'].' '.($state['target']??''):'';
-		?>
-		<tr data-p69-job="<?php echo absint($job['id']); ?>"><td>#<?php echo absint($job['id']); ?></td><td><?php echo esc_html($job['category'].$target_label); ?></td><td><strong><?php echo esc_html($job['status']); ?></strong><br><small><?php echo esc_html($state['phase']??'queued'); ?></small></td>
-		<td><progress max="100" value="<?php echo esc_attr($pct); ?>" style="width:120px"></progress> <?php echo esc_html($done.' / '.($total?:'…').' ('.$pct.'%)'); ?><?php if($current_chunk): ?><br><small>Current chunk #<?php echo $current_chunk; ?> · chunk <?php echo ($chunk_pos+1); ?> of <?php echo count($chunks); ?></small><?php endif; ?></td>
-		<td>+<?php echo absint($job['created_count']??0); ?> / ~<?php echo absint($job['updated_count']??0); ?> / =<?php echo absint($job['skipped_count']??0); ?></td><td><?php echo absint($job['error_count']); ?></td><td>
-		<?php foreach(array('pause'=>'Pause','resume'=>'Resume','retry'=>'Retry','cancel'=>'Cancel') as $key=>$label): if(($key==='pause' && !in_array($job['status'],array('running','pending'),true)) || ($key==='resume' && $job['status']!=='paused') || ($key==='retry' && $job['status']!=='failed') || ($key==='cancel' && !in_array($job['status'],array('pending','running','paused'),true))) continue; ?>
-		<form class="p69-inline-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="<?php echo esc_attr($key); ?>"><input type="hidden" name="job_id" value="<?php echo absint($job['id']); ?>"><button class="button button-small"><?php echo esc_html($label); ?></button></form>
-		<?php endforeach; ?></td></tr>
-	<?php endforeach; else: ?><tr><td colspan="7">No import jobs yet.</td></tr><?php endif; ?></tbody></table></div></div>
-
-	<div class="p69-jobs-toolbar">
-		<form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
-			<input type="hidden" name="page" value="pirate69-importer">
-			<select name="job_status" aria-label="Filter jobs by status"><option value="all">All statuses</option><?php foreach(array('pending','running','paused','completed','failed','cancelled') as $status): ?><option value="<?php echo esc_attr($status); ?>" <?php selected($job_status,$status); ?>><?php echo esc_html(ucfirst($status)); ?></option><?php endforeach; ?></select>
-			<select name="job_catalog" aria-label="Filter jobs by catalog"><option value="all">All catalogs</option><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($job_catalog,$key); ?>><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select>
-			<button class="button">Apply filters</button>
-			<a class="button" href="<?php echo esc_url(admin_url('admin.php?page=pirate69-importer')); ?>">Reset</a>
-		</form>
-		<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Clear completed, failed and cancelled job history? Active jobs will remain.');">
-			<?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="clear_completed"><button class="button">Clear finished history</button>
-		</form>
-	</div>
-	</div>
-	<div class="p69-tab-panel" data-p69-panel="posters">
-	<div class="p69-tool-grid p69-bottom-grid"><div class="p69-admin-panel"><h3><span class="dashicons dashicons-format-image"></span> Poster manager</h3>
-	<p id="p69-poster-status" aria-live="polite">Checking poster queue…</p><p>Retry failed poster downloads without replacing existing featured images.</p><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_poster_retry'); ?><input type="hidden" name="action" value="pirate69_poster_retry"><button class="button">Retry failed posters (up to 30)</button></form></div>
-	<div class="p69-admin-panel p69-activity-panel"><div class="p69-panel-heading"><h3><span class="dashicons dashicons-list-view"></span> Recent activity</h3><span>Latest 50 entries</span></div>
-	<form class="p69-log-filters" method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>"><input type="hidden" name="page" value="pirate69-importer"><select name="log_level"><option value="all">All levels</option><?php foreach(array('info','warning','error') as $level): ?><option value="<?php echo esc_attr($level); ?>" <?php selected($log_level,$level); ?>><?php echo esc_html(ucfirst($level)); ?></option><?php endforeach; ?></select><input type="search" name="log_search" value="<?php echo esc_attr($log_search); ?>" placeholder="Search activity"><button class="button">Filter</button></form>
-	<form class="p69-clear-logs" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Permanently clear recent activity logs?');"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="clear_logs"><button class="button">Clear recent activity</button></form><ul><?php if($logs): foreach($logs as $log): ?><li><code><?php echo esc_html($log['created_at']); ?></code> <strong><?php echo esc_html(strtoupper($log['level'])); ?></strong> <?php echo esc_html($log['message']); ?></li><?php endforeach; else: ?><li>No logs yet.</li><?php endif; ?></ul></div></div>
-	</div>
-	</div>
-	</div>
-	
-<script>
-(function(){
- const tabs=document.querySelectorAll('[data-p69-tab]'), panels=document.querySelectorAll('[data-p69-panel]');
- tabs.forEach(function(tab){tab.addEventListener('click',function(){
-  tabs.forEach(function(item){item.classList.toggle('is-active',item===tab);});
-  panels.forEach(function(panel){panel.classList.toggle('is-active',panel.getAttribute('data-p69-panel')===tab.getAttribute('data-p69-tab'));});
-  try{sessionStorage.setItem('p69-active-tab',tab.getAttribute('data-p69-tab'));}catch(e){}
- });});
- try{const saved=sessionStorage.getItem('p69-active-tab');const target=document.querySelector('[data-p69-tab="'+saved+'"]');if(target)target.click();}catch(e){}
-})();
-</script>
-<?php if ($has_active): ?>
-<script>
-(function () {
- const jobs = <?php echo wp_json_encode(array_map('absint', array_column((array) $jobs, 'id'))); ?>;
- const endpoint = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
- const nonce = <?php echo wp_json_encode(wp_create_nonce('pirate69_import_worker')); ?>;
- let cursor = 0;
- function worker() {
-  if (cursor >= jobs.length) { window.location.reload(); return; }
-  const body = new URLSearchParams({action: 'pirate69_import_worker', nonce: nonce, job_id: String(jobs[cursor])});
-  fetch(endpoint, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}, body: body.toString()})
-   .then(function (response) { return response.json(); })
-   .then(function (response) {
-    if (!response.success) { cursor++; setTimeout(worker, 1000); return; }
-    const job = response.data;
-    const row = document.querySelector('tr[data-p69-job="' + job.id + '"]');
-    if (row) {
-     const progress = row.querySelector('progress');
-     if (progress && job.total > 0) { progress.value = Math.floor(job.processed / job.total * 100); }
+function pirate69_render_missing_data() {
+    if (!current_user_can('manage_options')) return;
+    global $wpdb; $categories=pirate69_source_categories();$map=$wpdb->prefix.'p69_source_map';
+    $category=sanitize_key($_GET['catalog']??'all');$only=sanitize_key($_GET['view']??'missing');
+    $summary=pirate69_repository_stats();$rows=array();$errors=array();
+    foreach($categories as $key=>$cat){
+        if($category!=='all'&&$category!==$key)continue;
+        $index=pirate69_fetch_json($cat['index']);if(is_wp_error($index)){$errors[$key]=$index->get_error_message();continue;}
+        foreach((array)$index as $row){if(!is_array($row))continue;$id=sanitize_text_field($row['id']??'');if(!$id)continue;
+            $mapped=(int)$wpdb->get_var($wpdb->prepare("SELECT post_id FROM {$map} WHERE category=%s AND source_hash=%s LIMIT 1",$key,hash('sha256',$id)));
+            $missing_fields=array();foreach(array('title'=>'Title','poster'=>'Poster URL','chunk'=>'Chunk reference') as $field=>$label)if(empty($row[$field]))$missing_fields[]=$label;
+            if($only==='missing'&&$mapped)continue;if($only==='incomplete'&&!$missing_fields)continue;if($only==='all'&&!$mapped&&!$missing_fields){}elseif($only==='all'){} 
+            if($only==='incomplete'&&!$missing_fields)continue;
+            $rows[]=array('category'=>$key,'id'=>$id,'title'=>sanitize_text_field($row['title']??$id),'chunk'=>absint($row['chunk']??0),'year'=>sanitize_text_field($row['year']??''),'mapped'=>$mapped,'missing_fields'=>$missing_fields);
+        }
     }
-    if (job.status === 'pending' || job.status === 'running') setTimeout(worker, 450);
-    else { cursor++; setTimeout(worker, 200); }
-   }).catch(function () { setTimeout(worker, 1500); });
- }
- worker();
-})();
-</script>
-<?php endif; ?>
-
-<script>
-(function () {
- const endpoint = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
- const nonce = <?php echo wp_json_encode(wp_create_nonce('pirate69_poster_worker')); ?>;
- const output = document.getElementById('p69-poster-status');
- if (!output) return;
- function tick() {
-  const body = new URLSearchParams({action: 'pirate69_poster_worker', nonce: nonce});
-  fetch(endpoint, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}, body: body.toString()})
-   .then(function (response) { return response.json(); })
-   .then(function (response) {
-    if (!response.success) { output.textContent = 'Poster queue status unavailable.'; return; }
-    const s = response.data;
-    output.textContent = 'Queued: ' + s.queued + ' · Processing: ' + s.processing + ' · Uploaded: ' + s.completed + ' · Failed: ' + s.failed;
-    if (s.queued > 0) setTimeout(tick, 700);
-   }).catch(function () { output.textContent = 'Poster worker request failed. Retrying…'; setTimeout(tick, 3000); });
- }
- tick();
-})();
-</script>
-
-	<?php
+    pirate69_importer_header('Missing Data','Find source records not yet imported and index entries with incomplete fields.','missing');
+    ?>
+    <div class="p69-stat-grid"><div class="p69-stat-card"><span class="p69-stat-label">Not imported</span><strong><?php echo number_format_i18n($summary['missing']); ?></strong><small>Across all catalogs</small></div><div class="p69-stat-card"><span class="p69-stat-label">Incomplete source rows</span><strong><?php echo number_format_i18n($summary['incomplete']); ?></strong><small>Missing ID, title, poster or chunk</small></div></div>
+    <div class="p69-admin-panel"><form class="p69-search-form" method="get"><input type="hidden" name="page" value="pirate69-import-missing"><select name="catalog"><option value="all">All catalogs</option><?php foreach($categories as $key=>$cat): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($category,$key); ?>><?php echo esc_html($cat['label']); ?></option><?php endforeach; ?></select><select name="view"><option value="missing" <?php selected($only,'missing'); ?>>Not imported</option><option value="incomplete" <?php selected($only,'incomplete'); ?>>Incomplete source data</option><option value="all" <?php selected($only,'all'); ?>>All source records</option></select><button class="button button-primary">Apply</button></form>
+    <p class="p69-footnote">Showing up to 300 records. Records with missing chunk references cannot be imported through the current chunk-based worker until the source data is corrected.</p>
+    <div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>Record</th><th>Catalog</th><th>Year</th><th>Chunk</th><th>Website status</th><th>Source quality</th><th>Action</th></tr></thead><tbody><?php $shown=0;foreach($rows as $row):if($shown++>=300)break; ?><tr><td><strong><?php echo esc_html($row['title']); ?></strong><code><?php echo esc_html($row['id']); ?></code></td><td><?php echo esc_html($categories[$row['category']]['label']); ?></td><td><?php echo esc_html($row['year']?:'—'); ?></td><td><?php echo $row['chunk']?'#'.absint($row['chunk']):'Missing'; ?></td><td><?php echo $row['mapped']?'Imported':'<span class="p69-status p69-status-pending">Not imported</span>'; ?></td><td><?php echo $row['missing_fields']?esc_html(implode(', ',$row['missing_fields'])):'Complete'; ?></td><td><?php if(!$row['mapped']&&$row['chunk']):pirate69_importer_start_form($row['category'],'movie',$row['id'],'Import');else:echo '—';endif; ?></td></tr><?php endforeach;if(!$rows):?><tr><td colspan="7">No matching records found.</td></tr><?php endif; ?></tbody></table></div></div>
+    <?php pirate69_importer_footer();
 }
+
+function pirate69_refresh_repo_stats() {
+    if (!current_user_can('manage_options')) wp_die('Not allowed.');
+    check_admin_referer('p69_refresh_repo_stats');
+    delete_transient('p69_repository_stats');
+    pirate69_repository_stats(true);
+    set_transient('pirate69_importer_notice','Repository statistics refreshed.',30);
+    wp_safe_redirect(pirate69_importer_url('pirate69-importer')); exit;
+}
+add_action('admin_post_p69_refresh_repo_stats','pirate69_refresh_repo_stats');
