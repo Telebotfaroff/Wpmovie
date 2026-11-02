@@ -245,10 +245,55 @@ function pirate69_render_repository_browser() {
     $categories=pirate69_source_categories();
     $category=sanitize_key($_GET['catalog']??'hollywood'); if(!isset($categories[$category]))$category='hollywood';
     $query=sanitize_text_field(wp_unslash($_GET['q']??''));
+    $chunk_catalog=sanitize_key($_GET['chunk_catalog']??$category); if(!isset($categories[$chunk_catalog]))$chunk_catalog=$category;
+    $chunk_index=pirate69_fetch_json($categories[$chunk_catalog]['index']);
+    $available_chunks=array();
+    if(!is_wp_error($chunk_index)) {
+        foreach((array)$chunk_index as $chunk_row) {
+            if(!is_array($chunk_row)||empty($chunk_row['chunk'])) continue;
+            $chunk_number=absint($chunk_row['chunk']);
+            if(!$chunk_number) continue;
+            if(!isset($available_chunks[$chunk_number])) $available_chunks[$chunk_number]=0;
+            $available_chunks[$chunk_number]++;
+        }
+        ksort($available_chunks,SORT_NUMERIC);
+    }
     $results=array();$error='';
     if($query!==''){ $results=pirate69_search_catalog($category,$query,100); if(is_wp_error($results)){$error=$results->get_error_message();$results=array();} }
     pirate69_importer_header('Repository Browser','Search the live GitHub index. Only selected records are fetched and imported.','repository');
     ?>
+    <div class="p69-admin-panel">
+      <div class="p69-panel-heading"><div><span class="p69-section-kicker">CHUNK IMPORT</span><h2>Import by source category and chunk</h2></div></div>
+      <p class="p69-muted">Choose Vegamovies, Rogmovie or XPrimeHub, then import one numbered JSON chunk. This uses the same background queue and duplicate detection as the normal importer.</p>
+      <form class="p69-search-form" method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
+        <input type="hidden" name="page" value="pirate69-repository-browser">
+        <label>Source category <select name="chunk_catalog">
+          <option value="hollywood" <?php selected($chunk_catalog,'hollywood'); ?>>Vegamovies · Hollywood</option>
+          <option value="bollywood" <?php selected($chunk_catalog,'bollywood'); ?>>Rogmovie · Bollywood</option>
+          <option value="xprimehub" <?php selected($chunk_catalog,'xprimehub'); ?>>XPrimeHub</option>
+        </select></label>
+        <button class="button">Load chunks</button>
+      </form>
+      <?php if(is_wp_error($chunk_index)): ?><p class="p69-error-text"><?php echo esc_html($chunk_index->get_error_message()); ?></p>
+      <?php elseif(!$available_chunks): ?><p class="p69-muted">No chunk references were found for this category.</p>
+      <?php else: ?>
+        <form class="p69-search-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+          <?php wp_nonce_field('pirate69_importer_action'); ?>
+          <input type="hidden" name="action" value="pirate69_importer_action">
+          <input type="hidden" name="p69_action" value="start">
+          <input type="hidden" name="category" value="<?php echo esc_attr($chunk_catalog); ?>">
+          <input type="hidden" name="job_type" value="chunk">
+          <input type="hidden" name="return_page" value="pirate69-import-jobs">
+          <label>Available chunk <select name="target" required>
+            <?php foreach($available_chunks as $chunk_number=>$record_count): ?>
+              <option value="<?php echo absint($chunk_number); ?>">Chunk #<?php echo absint($chunk_number); ?> · <?php echo number_format_i18n($record_count); ?> records</option>
+            <?php endforeach; ?>
+          </select></label>
+          <button class="button button-primary" onclick="return confirm('Queue this chunk for import?');">Import selected chunk</button>
+          <span class="p69-muted"><?php echo number_format_i18n(count($available_chunks)); ?> chunks available · <?php echo number_format_i18n(array_sum($available_chunks)); ?> indexed records</span>
+        </form>
+      <?php endif; ?>
+    </div>
     <div class="p69-admin-panel p69-search-panel">
       <form class="p69-search-form" method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
         <input type="hidden" name="page" value="pirate69-repository-browser">
