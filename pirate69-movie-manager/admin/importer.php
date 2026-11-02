@@ -131,7 +131,15 @@ function pirate69_importer_action() {
         $category = sanitize_key($_POST['category'] ?? '');
         $type = sanitize_key($_POST['job_type'] ?? 'sync');
         $target = sanitize_text_field(wp_unslash($_POST['target'] ?? ''));
-        if ('all' === $category && 'sync' === $type) {
+        if ('selection' === $type) {
+            $selected = isset($_POST['selected_ids']) && is_array($_POST['selected_ids']) ? array_slice(array_values(array_unique(array_filter(array_map('sanitize_text_field', wp_unslash($_POST['selected_ids']))))), 0, 500) : array();
+            if (!$selected) {
+                $notice = 'Select at least one repository record to import.';
+            } else {
+                $result = pirate69_create_import_job($category, 'selection', wp_json_encode($selected));
+                $notice = is_wp_error($result) ? $result->get_error_message() : 'Bulk import queued for ' . count($selected) . ' selected record(s). Job #' . absint($result) . '.';
+            }
+        } elseif ('all' === $category && 'sync' === $type) {
             $queued = array();
             $errors = array();
             foreach (array_keys(pirate69_source_categories()) as $catalog_key) {
@@ -256,8 +264,15 @@ function pirate69_render_repository_browser() {
         <?php if($error): ?><div class="notice notice-error inline"><p><?php echo esc_html($error); ?></p></div>
         <?php elseif(!$results): ?><p class="p69-empty">No matching records found in <?php echo esc_html($categories[$category]['label']); ?>.</p>
         <?php else: ?><div class="p69-results-heading"><strong><?php echo number_format_i18n(count($results)); ?> results</strong><span>Showing up to 100 matches from the source index</span></div>
-          <div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>Title / source ID</th><th>Year</th><th>Type</th><th>Chunk</th><th>Action</th></tr></thead><tbody>
-          <?php foreach($results as $item): ?><tr><td><strong><?php echo esc_html($item['title']); ?></strong><code><?php echo esc_html($item['id']); ?></code></td><td><?php echo esc_html($item['year']?:'—'); ?></td><td><?php echo !empty($item['isSeries'])?'TV series':'Movie'; ?></td><td><?php echo $item['chunk']?'#'.absint($item['chunk']):'—'; ?></td><td><?php pirate69_importer_start_form($category,'movie',$item['id'],'Import record'); ?></td></tr><?php endforeach; ?>
+          <form id="p69-bulk-selection" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php wp_nonce_field('pirate69_importer_action'); ?>
+            <input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="start">
+            <input type="hidden" name="category" value="<?php echo esc_attr($category); ?>"><input type="hidden" name="job_type" value="selection">
+            <input type="hidden" name="return_page" value="pirate69-import-jobs">
+          </form>
+          <div class="p69-bulk-actions"><label><input type="checkbox" id="p69-select-all-results"> Select all results on this page</label><button type="submit" form="p69-bulk-selection" class="button button-primary" onclick="return confirm('Queue imports for the selected repository records?');">Import selected</button><span class="p69-muted">Up to 500 records per bulk job.</span></div>
+          <div class="p69-table-wrap"><table class="widefat striped"><thead><tr><th>Select</th><th>Title / source ID</th><th>Year</th><th>Type</th><th>Chunk</th><th>Action</th></tr></thead><tbody>
+          <?php foreach($results as $item): ?><tr><td><input type="checkbox" class="p69-result-checkbox" name="selected_ids[]" value="<?php echo esc_attr($item['id']); ?>" form="p69-bulk-selection" aria-label="<?php echo esc_attr('Select '.$item['title']); ?>"></td><td><strong><?php echo esc_html($item['title']); ?></strong><code><?php echo esc_html($item['id']); ?></code></td><td><?php echo esc_html($item['year']?:'—'); ?></td><td><?php echo !empty($item['isSeries'])?'TV series':'Movie'; ?></td><td><?php echo $item['chunk']?'#'.absint($item['chunk']):'—'; ?></td><td><?php pirate69_importer_start_form($category,'movie',$item['id'],'Import record'); ?></td></tr><?php endforeach; ?>
           </tbody></table></div>
         <?php endif; ?>
       <?php else: ?><div class="p69-empty-state"><span class="dashicons dashicons-search"></span><h2>Search your source catalog</h2><p>Search by movie title or source ID. Results come directly from the selected GitHub index.</p></div><?php endif; ?>
