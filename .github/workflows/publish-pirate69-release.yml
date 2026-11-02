@@ -63,8 +63,17 @@ jobs:
             echo "${major}.${minor}.$((patch + 1))"
           }
 
-          THEME_VERSION="$(grep -m1 '^Version:' pirate69-theme/style.css | awk '{print $2}')"
-          PLUGIN_VERSION="$(grep -m1 '^ \\* Version:' pirate69-movie-manager/pirate69-movie-manager.php | awk '{print $3}')"
+          THEME_VERSION="$(awk -F': *' '/^Version:/ {print $2; exit}' pirate69-theme/style.css)"
+          PLUGIN_VERSION="$(awk -F': *' '/^[[:space:]]*Version:/ {print $2; exit}' pirate69-movie-manager/pirate69-movie-manager.php)"
+
+          if [[ ! "$THEME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not read a valid theme version from style.css (got: '$THEME_VERSION')"
+            exit 1
+          fi
+          if [[ ! "$PLUGIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not read a valid plugin version from the plugin header (got: '$PLUGIN_VERSION')"
+            exit 1
+          fi
 
           if [[ "$UPDATE_THEME" == "true" ]]; then
             THEME_VERSION="$(bump_patch "$THEME_VERSION")"
