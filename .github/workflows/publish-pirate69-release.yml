@@ -1,61 +1,127 @@
-name: Publish Pirate69 GitHub Update Release
+name: Automatic Pirate69 Updates
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'pirate69-theme/**'
+      - 'pirate69-movie-manager/**'
   workflow_dispatch:
-    inputs:
-      theme_version:
-        description: 'Theme version (example: 1.0.6)'
-        required: true
-        type: string
-      plugin_version:
-        description: 'Plugin version (example: 2.5.2)'
-        required: true
-        type: string
-      release_notes:
-        description: 'Short release notes'
-        required: true
-        type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: pirate69-auto-release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout source
+      - name: Checkout latest source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Validate versions
+      - name: Detect changed components
+        id: changes
         env:
-          THEME_VERSION: ${{ inputs.theme_version }}
-          PLUGIN_VERSION: ${{ inputs.plugin_version }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          [[ "$THEME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$PLUGIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          grep -Eq "Version: ${THEME_VERSION}$" pirate69-theme/style.css
-          grep -Fq "PIRATE69_VERSION', '${THEME_VERSION}'" pirate69-theme/functions.php
-          grep -Fq "Version: ${PLUGIN_VERSION}" pirate69-movie-manager/pirate69-movie-manager.php
-          grep -Fq "P69MM_VERSION', '${PLUGIN_VERSION}'" pirate69-movie-manager/pirate69-movie-manager.php
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            echo "theme=true" >> "$GITHUB_OUTPUT"
+            echo "plugin=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-      - name: Build clean WordPress packages
+          CHANGED="$(git diff --name-only "$BEFORE_SHA" "$AFTER_SHA")"
+          if grep -q '^pirate69-theme/' <<< "$CHANGED"; then
+            echo "theme=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "theme=false" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -q '^pirate69-movie-manager/' <<< "$CHANGED"; then
+            echo "plugin=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "plugin=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Automatically increment component versions
+        id: versions
+        env:
+          UPDATE_THEME: ${{ steps.changes.outputs.theme }}
+          UPDATE_PLUGIN: ${{ steps.changes.outputs.plugin }}
         run: |
           set -euo pipefail
+
+          bump_patch() {
+            IFS='.' read -r major minor patch <<< "$1"
+            echo "${major}.${minor}.$((patch + 1))"
+          }
+
+          THEME_VERSION="$(grep -m1 '^Version:' pirate69-theme/style.css | awk '{print $2}')"
+          PLUGIN_VERSION="$(grep -m1 '^ \\* Version:' pirate69-movie-manager/pirate69-movie-manager.php | awk '{print $3}')"
+
+          if [[ "$UPDATE_THEME" == "true" ]]; then
+            THEME_VERSION="$(bump_patch "$THEME_VERSION")"
+            sed -i -E "s/^Version: [0-9]+\\.[0-9]+\\.[0-9]+$/Version: $THEME_VERSION/" pirate69-theme/style.css
+            sed -i -E "s/(PIRATE69_VERSION', ')[0-9]+\\.[0-9]+\\.[0-9]+(')/\\1$THEME_VERSION\\2/" pirate69-theme/functions.php
+          fi
+
+          if [[ "$UPDATE_PLUGIN" == "true" ]]; then
+            PLUGIN_VERSION="$(bump_patch "$PLUGIN_VERSION")"
+            sed -i -E "s/( \\* Version: )[0-9]+\\.[0-9]+\\.[0-9]+/\\1$PLUGIN_VERSION/" pirate69-movie-manager/pirate69-movie-manager.php
+            sed -i -E "s/(P69MM_VERSION', ')[0-9]+\\.[0-9]+\\.[0-9]+(')/\\1$PLUGIN_VERSION\\2/" pirate69-movie-manager/pirate69-movie-manager.php
+          fi
+
+          echo "theme=$THEME_VERSION" >> "$GITHUB_OUTPUT"
+          echo "plugin=$PLUGIN_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Commit automatic version bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THEME_VERSION: ${{ steps.versions.outputs.theme }}
+          PLUGIN_VERSION: ${{ steps.versions.outputs.plugin }}
+          UPDATE_THEME: ${{ steps.changes.outputs.theme }}
+          UPDATE_PLUGIN: ${{ steps.changes.outputs.plugin }}
+        run: |
+          set -euo pipefail
+          if [[ "$UPDATE_THEME" == "true" || "$UPDATE_PLUGIN" == "true" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pirate69-theme/style.css pirate69-theme/functions.php pirate69-movie-manager/pirate69-movie-manager.php
+            git diff --cached --quiet || {
+              git commit -m "chore: automatically bump Pirate69 release versions"
+              git push origin HEAD:main
+            }
+          fi
+
+      - name: Build WordPress update packages
+        run: |
+          set -euo pipefail
+          rm -f pirate69-theme.zip pirate69-movie-manager.zip
           zip -qr pirate69-theme.zip pirate69-theme
           zip -qr pirate69-movie-manager.zip pirate69-movie-manager
           unzip -l pirate69-theme.zip | grep -q 'pirate69-theme/style.css'
           unzip -l pirate69-movie-manager.zip | grep -q 'pirate69-movie-manager/pirate69-movie-manager.php'
 
-      - name: Publish release with both update packages
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          THEME_VERSION: ${{ inputs.theme_version }}
-          PLUGIN_VERSION: ${{ inputs.plugin_version }}
-          NOTES: ${{ inputs.release_notes }}
+          THEME_VERSION: ${{ steps.versions.outputs.theme }}
+          PLUGIN_VERSION: ${{ steps.versions.outputs.plugin }}
+          UPDATE_THEME: ${{ steps.changes.outputs.theme }}
+          UPDATE_PLUGIN: ${{ steps.changes.outputs.plugin }}
         run: |
           set -euo pipefail
           TAG="pirate69-theme-v${THEME_VERSION}-plugin-v${PLUGIN_VERSION}"
+          NOTES="Automatic Pirate69 release. Updated components:"
+          [[ "$UPDATE_THEME" == "true" ]] && NOTES="$NOTES theme"
+          [[ "$UPDATE_PLUGIN" == "true" ]] && NOTES="$NOTES plugin"
           gh release create "$TAG" pirate69-theme.zip pirate69-movie-manager.zip \
             --title "Pirate69 Theme ${THEME_VERSION} / Movie Manager ${PLUGIN_VERSION}" \
-            --notes "${NOTES}"
+            --notes "$NOTES"
