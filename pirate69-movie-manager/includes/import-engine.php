@@ -324,6 +324,7 @@ function pirate69_import_record($record, $category, $dry_run = false) {
 		if (!empty($settings['poster_import']) && !has_post_thumbnail($post_id) && !empty($record['poster'])) {
 			pirate69_queue_poster($post_id, $record['poster']);
 		}
+		if (function_exists('pirate69_schedule_tmdb_sync')) pirate69_schedule_tmdb_sync($post_id);
 		return array('status' => 'skipped', 'post_id' => $post_id);
 	}
 
@@ -366,6 +367,8 @@ function pirate69_import_record($record, $category, $dry_run = false) {
 	if (!empty($settings['poster_import']) && !has_post_thumbnail($post_id) && !empty($record['poster'])) {
 		pirate69_queue_poster($post_id, $record['poster']);
 	}
+	// TMDB matching runs separately so slow API/image requests never block catalog batches.
+	if (function_exists('pirate69_schedule_tmdb_sync')) pirate69_schedule_tmdb_sync($post_id);
 	return array('status' => $created_now ? 'created' : 'updated', 'post_id' => $post_id);
 }
 
