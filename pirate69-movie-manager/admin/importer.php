@@ -177,7 +177,7 @@ function pirate69_render_importer() {
 <?php if ($has_active): ?>
 <script>
 (function () {
- const jobs = <?php echo wp_json_encode(array_values(array_map('absint', array_column(array_filter((array) $jobs, function ($job) { return in_array($job['status'], array('pending', 'running'), true); }), 'id'))); ?>;
+ const jobs = <?php echo wp_json_encode(array_map('absint', array_column((array) $jobs, 'id'))); ?>;
  const endpoint = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
  const nonce = <?php echo wp_json_encode(wp_create_nonce('pirate69_import_worker')); ?>;
  let cursor = 0;
