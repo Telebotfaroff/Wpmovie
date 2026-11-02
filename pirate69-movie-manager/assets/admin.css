@@ -24,3 +24,29 @@
 .p69-admin .notice{border-radius:8px;border-top:0;border-right:0;border-bottom:0;padding:5px 12px}.p69-admin .notice p{font-size:12px}
 @media(max-width:900px){.p69-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.p69-hero{padding:24px}.p69-hero h1{font-size:25px}}
 @media(max-width:600px){.p69-admin{margin-right:10px}.p69-hero{padding:20px;border-radius:12px}.p69-hero-mark{width:58px;height:58px;font-size:18px;border-radius:15px}.p69-hero h1{font-size:22px}.p69-hero p{font-size:12px}.p69-stat-grid{gap:8px}.p69-stat-card{padding:13px}.p69-stat-card strong{font-size:23px}.p69-tool-grid{grid-template-columns:1fr}.p69-search-form{grid-template-columns:1fr}.p69-search-form label{margin-top:4px}.p69-admin-panel{padding:16px}.p69-section-heading h2{font-size:17px}.p69-admin .widefat{min-width:760px}}
+
+
+/* Modular importer navigation */
+.p69-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;padding:7px;background:#fff;border:1px solid #e4e6ef;border-radius:12px}
+.p69-tab{appearance:none;border:0;border-radius:8px;background:transparent;color:#626a7d;padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer}
+.p69-tab:hover{background:#f5f4fc;color:#5141bd}
+.p69-tab.is-active{background:#5746c6;color:#fff;box-shadow:0 3px 9px rgba(87,70,198,.16)}
+.p69-tab span{display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:5px;padding:0 5px;border-radius:20px;background:rgba(255,255,255,.2);font-size:10px}
+.p69-tab-panel{display:none}
+.p69-tab-panel.is-active{display:block;animation:p69-panel-in .16s ease-out}
+@keyframes p69-panel-in{from{opacity:.55;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.p69-jobs-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:0 0 12px}
+.p69-jobs-toolbar form,.p69-log-filters{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.p69-log-filters{margin:0 0 10px}
+.p69-log-filters input[type=search]{min-width:190px}
+.p69-clear-logs{margin:0 0 12px}
+.p69-clear-logs .button{color:#a33b43;border-color:#efd5d7}
+.p69-admin .button:focus-visible,.p69-tab:focus-visible{outline:2px solid #7765df;outline-offset:2px}
+@media(max-width:600px){
+ .p69-tabs{display:grid;grid-template-columns:1fr 1fr}
+ .p69-tab{padding:10px 8px;font-size:12px}
+ .p69-jobs-toolbar,.p69-jobs-toolbar form,.p69-log-filters{align-items:stretch}
+ .p69-jobs-toolbar form{width:100%}
+ .p69-jobs-toolbar select,.p69-log-filters select,.p69-log-filters input{width:100%;min-height:40px}
+ .p69-jobs-toolbar form .button{flex:1}
+}
