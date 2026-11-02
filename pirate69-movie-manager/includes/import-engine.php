@@ -20,15 +20,15 @@ function pirate69_create_import_job($category, $job_type = 'sync', $target = '')
 	$schema = pirate69_ensure_schema();
 	if (is_wp_error($schema)) return $schema;
 	$categories = pirate69_source_categories();
-	if (!isset($categories[$category]) || !in_array($job_type,array('sync','preview','homepage','chunk','movie'),true)) {
+	if (!isset($categories[$category]) || !in_array($job_type,array('sync','preview','homepage','chunk','movie','selection'),true)) {
 		return new WP_Error('p69_bad_category', 'Unknown catalog category.');
 	}
-	if (in_array($job_type, array('chunk','movie'), true) && '' === (string) $target) {
+	if (in_array($job_type, array('chunk','movie','selection'), true) && '' === (string) $target) {
 		return new WP_Error('p69_missing_target', 'A chunk number or movie source ID is required.');
 	}
 	$table = $wpdb->prefix . 'p69_import_jobs';
 	$active = 0;
-	if (in_array($job_type,array('chunk','movie'),true)) {
+	if (in_array($job_type,array('chunk','movie','selection'),true)) {
 		$active_rows = $wpdb->get_results($wpdb->prepare("SELECT id,payload FROM {$table} WHERE category=%s AND job_type=%s AND status IN ('pending','running','paused') ORDER BY id DESC", $category, $job_type), ARRAY_A);
 		foreach ((array)$active_rows as $active_row) {
 			$active_state = json_decode($active_row['payload'] ?? '', true);
@@ -167,6 +167,16 @@ function pirate69_process_import_job($job_id) {
 				$wanted_chunk = is_array($wanted_row) ? absint($wanted_row['chunk'] ?? 0) : 0;
 				$chunk_map = ($wanted_chunk && isset($chunk_map[$wanted_chunk])) ? array($wanted_chunk => array($target)) : array();
 				$index_rows = isset($index_rows[$target]) ? array($target => $index_rows[$target]) : array();
+			} elseif ('selection' === $job_type) {
+				$selected_ids = json_decode($target, true);
+				$selected_ids = is_array($selected_ids) ? array_fill_keys(array_map('strval', $selected_ids), true) : array();
+				$selected_map = array();
+				foreach ($index_rows as $source_id => $source_row) {
+					if (!isset($selected_ids[$source_id])) { unset($index_rows[$source_id]); continue; }
+					$chunk_number = absint($source_row['chunk'] ?? 0);
+					if ($chunk_number && isset($chunk_map[$chunk_number])) $selected_map[$chunk_number][] = $source_id;
+				}
+				$chunk_map = $selected_map;
 			}
 			if (in_array($job_type, array('chunk','movie'), true) && !$chunk_map) {
 				pirate69_fail_job($job_id, 'The selected chunk or movie ID was not found in the source index.');
