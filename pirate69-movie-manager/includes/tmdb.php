@@ -8,7 +8,7 @@ defined('ABSPATH') || exit;
 function pirate69_tmdb_settings() {
 	$settings = wp_parse_args(get_option('pirate69_import_settings', array()), array(
 		'tmdb_token' => '', 'tmdb_language' => 'en-US', 'tmdb_image_size' => 'w500',
-		'tmdb_auto_sync' => 1, 'tmdb_min_score' => 82,
+		'tmdb_auto_sync' => 0, 'tmdb_min_score' => 82,
 	));
 	return $settings;
 }
