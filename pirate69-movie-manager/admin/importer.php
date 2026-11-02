@@ -146,6 +146,7 @@ function pirate69_importer_action() {
         else {
             if ($action === 'pause') $wpdb->update($table, array('status'=>'paused','updated_at'=>current_time('mysql', true)), array('id'=>$job_id));
             if ($action === 'resume' || $action === 'retry') {
+                if ($action === 'retry') { $state = json_decode($job['payload'] ?? '', true); if (!is_array($state)) $state = array(); $state['retries'] = 0; $wpdb->update($table, array('payload'=>wp_json_encode($state)), array('id'=>$job_id)); }
                 $wpdb->update($table, array('status'=>'pending','updated_at'=>current_time('mysql', true)), array('id'=>$job_id));
                 pirate69_schedule_job($job_id, 5);
             }
@@ -252,7 +253,7 @@ function pirate69_render_import_jobs() {
     $where=array('1=1');$args=array();
     if(in_array($status,array('pending','running','paused','completed','failed','cancelled'),true)){$where[]='status=%s';$args[]=$status;}
     if(isset($categories[$category])){$where[]='category=%s';$args[]=$category;}
-    $sql="SELECT * FROM {$table} WHERE ".implode(' AND ',$where)." ORDER BY id DESC LIMIT 100";
+    $sql="SELECT * FROM {$table} WHERE ".implode(' AND ',$where)." ORDER BY (status IN ('pending','running','paused')) DESC, id DESC LIMIT 100";
     $jobs=$args?$wpdb->get_results($wpdb->prepare($sql,$args),ARRAY_A):$wpdb->get_results($sql,ARRAY_A);
     $active_ids=array();
     foreach($jobs as $job)if(in_array($job['status'],array('pending','running'),true))$active_ids[]=(int)$job['id'];
