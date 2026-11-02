@@ -10,15 +10,15 @@ function pirate69_register_importer_menu() {
     add_submenu_page('pirate69-importer', 'Overview', 'Overview', 'manage_options', 'pirate69-importer', 'pirate69_render_importer_overview');
     add_submenu_page('pirate69-importer', 'Repository Browser', 'Repository Browser', 'manage_options', 'pirate69-repository-browser', 'pirate69_render_repository_browser');
     add_submenu_page('pirate69-importer', 'Import Jobs', 'Import Jobs', 'manage_options', 'pirate69-import-jobs', 'pirate69_render_import_jobs');
-    add_submenu_page('pirate69-importer', 'Import History', 'manage_options', 'manage_options', 'pirate69-import-history', 'pirate69_render_import_history');
+    add_submenu_page('pirate69-importer', 'Import History', 'Import History', 'manage_options', 'pirate69-import-history', 'pirate69_render_import_history');
     add_submenu_page('pirate69-importer', 'Missing Data', 'Missing Data', 'manage_options', 'pirate69-import-missing', 'pirate69_render_missing_data');
 }
 add_action('admin_menu', 'pirate69_register_importer_menu');
 
 function pirate69_importer_enqueue($hook) {
     if (false === strpos((string) $hook, 'pirate69')) return;
-    wp_enqueue_style('pirate69-admin', P69MM_URL . 'assets/admin.css', array(), P69MM_VERSION);
-    wp_enqueue_script('pirate69-admin', P69MM_URL . 'assets/admin.js', array(), P69MM_VERSION, true);
+    wp_enqueue_style('pirate69-admin', plugin_dir_url(P69MM_FILE) . 'assets/admin.css', array(), P69MM_VERSION);
+    wp_enqueue_script('pirate69-admin', plugin_dir_url(P69MM_FILE) . 'assets/admin.js', array(), P69MM_VERSION, true);
     wp_localize_script('pirate69-admin', 'P69Importer', array(
         'ajaxUrl' => admin_url('admin-ajax.php'),
         'workerNonce' => wp_create_nonce('pirate69_import_worker'),
@@ -293,8 +293,10 @@ function pirate69_render_missing_data() {
     foreach($categories as $key=>$cat){
         if($category!=='all'&&$category!==$key)continue;
         $index=pirate69_fetch_json($cat['index']);if(is_wp_error($index)){$errors[$key]=$index->get_error_message();continue;}
+        $mapped_rows=$wpdb->get_col($wpdb->prepare("SELECT source_id FROM {$map} WHERE category=%s",$key));
+        $mapped_ids=array_fill_keys(array_map('strval',(array)$mapped_rows),true);
         foreach((array)$index as $row){if(!is_array($row))continue;$id=sanitize_text_field($row['id']??'');if(!$id)continue;
-            $mapped=(int)$wpdb->get_var($wpdb->prepare("SELECT post_id FROM {$map} WHERE category=%s AND source_hash=%s LIMIT 1",$key,hash('sha256',$id)));
+            $mapped=isset($mapped_ids[$id])?1:0;
             $missing_fields=array();foreach(array('title'=>'Title','poster'=>'Poster URL','chunk'=>'Chunk reference') as $field=>$label)if(empty($row[$field]))$missing_fields[]=$label;
             if($only==='missing'&&$mapped)continue;if($only==='incomplete'&&!$missing_fields)continue;if($only==='all'&&!$mapped&&!$missing_fields){}elseif($only==='all'){} 
             if($only==='incomplete'&&!$missing_fields)continue;
