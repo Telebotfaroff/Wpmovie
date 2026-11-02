@@ -12,10 +12,21 @@ $settings = wp_parse_args(get_option('pirate69_settings', array()), array('posts
 <?php endif; ?>
 <section id="latest" class="catalog-section container"><div class="section-heading"><div><p class="eyebrow">FRESHLY ADDED</p><h2>Latest titles</h2></div><a class="text-link" href="<?php echo esc_url(get_post_type_archive_link('p69_movie') ?: home_url('/')); ?>">View catalog →</a></div>
 <?php
-$latest = new WP_Query(array('post_type' => array('p69_movie', 'p69_tv_show'), 'posts_per_page' => absint($settings['posts_per_page']), 'post_status' => 'publish', 'no_found_rows' => true));
+$current_page = max(1, absint(get_query_var('paged')), absint(get_query_var('page')));
+$latest = new WP_Query(array('post_type' => array('p69_movie', 'p69_tv_show'), 'posts_per_page' => absint($settings['posts_per_page']), 'paged' => $current_page, 'post_status' => 'publish'));
 if ($latest->have_posts()) :
 ?>
 <div class="movie-grid"><?php while ($latest->have_posts()) : $latest->the_post(); get_template_part('template-parts/content', 'card'); endwhile; ?></div>
+<?php
+$pagination = paginate_links(array(
+    'total' => max(1, (int) $latest->max_num_pages),
+    'current' => $current_page,
+    'type' => 'list',
+    'prev_text' => '← Previous',
+    'next_text' => 'Next →',
+    'mid_size' => 2,
+));
+if ($pagination) : ?><nav class="p69-pagination" aria-label="<?php esc_attr_e('Catalog pages', 'pirate69'); ?>"><?php echo wp_kses_post($pagination); ?></nav><?php endif; ?>
 <?php else : ?>
 <div class="empty-state"><span class="empty-icon">✦</span><h3>The screen is yours.</h3><p>Your movie and series catalog will appear here once you add titles.</p><span class="empty-hint">Start an import from Pirate69 Importer.</span></div>
 <?php endif; wp_reset_postdata(); ?>
