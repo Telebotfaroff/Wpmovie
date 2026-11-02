@@ -64,7 +64,7 @@ jobs:
           }
 
           THEME_VERSION="$(awk -F': *' '/^Version:/ {print $2; exit}' pirate69-theme/style.css)"
-          PLUGIN_VERSION="$(awk -F': *' '/^[[:space:]]*\\* Version:/ {print $2; exit}' pirate69-movie-manager/pirate69-movie-manager.php)"
+          PLUGIN_VERSION="$(awk '/Version:/ {sub(/^.*Version:[[:space:]]*/, ""); print; exit}' pirate69-movie-manager/pirate69-movie-manager.php)"
 
           if [[ ! "$THEME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Could not read a valid theme version from style.css (got: '$THEME_VERSION')"
