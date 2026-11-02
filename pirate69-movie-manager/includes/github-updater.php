@@ -7,7 +7,7 @@ defined('ABSPATH') || exit;
 final class P69MM_GitHub_Updater {
     const REPOSITORY = 'Telebotfaroff/Wpmovie';
     const ASSET = 'pirate69-movie-manager.zip';
-    const CACHE_KEY = 'p69mm_github_release_v1';
+    const CACHE_KEY = 'p69mm_github_release_v2';
 
     public static function boot() {
         add_filter('pre_set_site_transient_update_plugins', array(__CLASS__, 'inject_update'));
@@ -29,7 +29,7 @@ final class P69MM_GitHub_Updater {
 
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if (!is_array($data) || !empty($data['draft']) || !empty($data['prerelease'])) $data = array();
-        set_site_transient(self::CACHE_KEY, $data, 6 * HOUR_IN_SECONDS);
+        set_site_transient(self::CACHE_KEY, $data, 5 * MINUTE_IN_SECONDS);
         return $data;
     }
 
