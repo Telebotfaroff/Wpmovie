@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Pirate69 Movie Manager
  * Description: Movie catalog content types, GitHub JSON imports, download-link storage and scheduled sync for Pirate69.
- * Version: 2.5.3
+ * Version: 2.5.4
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: Pirate69
@@ -10,7 +10,7 @@
  */
 defined('ABSPATH') || exit;
 
-define('P69MM_VERSION', '2.5.3');
+define('P69MM_VERSION', '2.5.4');
 define('P69MM_FILE', __FILE__);
 define('P69MM_DIR', plugin_dir_path(__FILE__));
 
