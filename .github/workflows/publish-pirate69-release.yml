@@ -1,0 +1,61 @@
+name: Publish Pirate69 GitHub Update Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      theme_version:
+        description: 'Theme version (example: 1.0.6)'
+        required: true
+        type: string
+      plugin_version:
+        description: 'Plugin version (example: 2.5.2)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Short release notes'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Validate versions
+        env:
+          THEME_VERSION: ${{ inputs.theme_version }}
+          PLUGIN_VERSION: ${{ inputs.plugin_version }}
+        run: |
+          set -euo pipefail
+          [[ "$THEME_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$PLUGIN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          grep -Eq "Version: ${THEME_VERSION}$" pirate69-theme/style.css
+          grep -Fq "PIRATE69_VERSION', '${THEME_VERSION}'" pirate69-theme/functions.php
+          grep -Fq "Version: ${PLUGIN_VERSION}" pirate69-movie-manager/pirate69-movie-manager.php
+          grep -Fq "P69MM_VERSION', '${PLUGIN_VERSION}'" pirate69-movie-manager/pirate69-movie-manager.php
+
+      - name: Build clean WordPress packages
+        run: |
+          set -euo pipefail
+          zip -qr pirate69-theme.zip pirate69-theme
+          zip -qr pirate69-movie-manager.zip pirate69-movie-manager
+          unzip -l pirate69-theme.zip | grep -q 'pirate69-theme/style.css'
+          unzip -l pirate69-movie-manager.zip | grep -q 'pirate69-movie-manager/pirate69-movie-manager.php'
+
+      - name: Publish release with both update packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THEME_VERSION: ${{ inputs.theme_version }}
+          PLUGIN_VERSION: ${{ inputs.plugin_version }}
+          NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -euo pipefail
+          TAG="pirate69-theme-v${THEME_VERSION}-plugin-v${PLUGIN_VERSION}"
+          gh release create "$TAG" pirate69-theme.zip pirate69-movie-manager.zip \
+            --title "Pirate69 Theme ${THEME_VERSION} / Movie Manager ${PLUGIN_VERSION}" \
+            --notes "${NOTES}"
