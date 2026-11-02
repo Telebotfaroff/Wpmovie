@@ -48,6 +48,24 @@ function pirate69_ajax_import_worker() {
 add_action('wp_ajax_pirate69_import_worker', 'pirate69_ajax_import_worker');
 
 
+function pirate69_ajax_poster_worker() {
+	if (!current_user_can('manage_options')) wp_send_json_error(array('message' => 'Not allowed.'), 403);
+	check_ajax_referer('pirate69_poster_worker', 'nonce');
+	pirate69_process_poster_queue(1);
+	global $wpdb;
+	$table = $wpdb->prefix . 'p69_poster_queue';
+	$counts = $wpdb->get_results("SELECT status, COUNT(*) AS amount FROM {$table} GROUP BY status", ARRAY_A);
+	$stats = array('queued' => 0, 'processing' => 0, 'completed' => 0, 'failed' => 0);
+	foreach ((array) $counts as $row) {
+		if (isset($stats[$row['status']])) $stats[$row['status']] = (int) $row['amount'];
+	}
+	wp_send_json_success($stats);
+}
+add_action('wp_ajax_pirate69_poster_worker', 'pirate69_ajax_poster_worker');
+
+
+
+
 
 function pirate69_render_job_action($category, $job_type, $target, $label) {
 	?>
@@ -170,7 +188,8 @@ function pirate69_render_importer() {
 		<?php endforeach; ?></td></tr>
 	<?php endforeach; else: ?><tr><td colspan="7">No import jobs yet.</td></tr><?php endif; ?></tbody></table></div></div>
 
-	<div class="p69-tool-grid p69-bottom-grid"><div class="p69-admin-panel"><h3><span class="dashicons dashicons-format-image"></span> Poster manager</h3><p>Retry failed poster downloads without replacing existing featured images.</p><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_poster_retry'); ?><input type="hidden" name="action" value="pirate69_poster_retry"><button class="button">Retry failed posters (up to 30)</button></form></div>
+	<div class="p69-tool-grid p69-bottom-grid"><div class="p69-admin-panel"><h3><span class="dashicons dashicons-format-image"></span> Poster manager</h3>
+	<p id="p69-poster-status" aria-live="polite">Checking poster queue…</p><p>Retry failed poster downloads without replacing existing featured images.</p><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_poster_retry'); ?><input type="hidden" name="action" value="pirate69_poster_retry"><button class="button">Retry failed posters (up to 30)</button></form></div>
 	<div class="p69-admin-panel p69-activity-panel"><h3><span class="dashicons dashicons-list-view"></span> Recent activity</h3><ul><?php if($logs): foreach($logs as $log): ?><li><code><?php echo esc_html($log['created_at']); ?></code> <strong><?php echo esc_html(strtoupper($log['level'])); ?></strong> <?php echo esc_html($log['message']); ?></li><?php endforeach; else: ?><li>No logs yet.</li><?php endif; ?></ul></div></div>
 	</div>
 	
@@ -202,6 +221,27 @@ function pirate69_render_importer() {
 })();
 </script>
 <?php endif; ?>
+
+<script>
+(function () {
+ const endpoint = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
+ const nonce = <?php echo wp_json_encode(wp_create_nonce('pirate69_poster_worker')); ?>;
+ const output = document.getElementById('p69-poster-status');
+ if (!output) return;
+ function tick() {
+  const body = new URLSearchParams({action: 'pirate69_poster_worker', nonce: nonce});
+  fetch(endpoint, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}, body: body.toString()})
+   .then(function (response) { return response.json(); })
+   .then(function (response) {
+    if (!response.success) { output.textContent = 'Poster queue status unavailable.'; return; }
+    const s = response.data;
+    output.textContent = 'Queued: ' + s.queued + ' · Processing: ' + s.processing + ' · Uploaded: ' + s.completed + ' · Failed: ' + s.failed;
+    if (s.queued > 0) setTimeout(tick, 700);
+   }).catch(function () { output.textContent = 'Poster worker request failed. Retrying…'; setTimeout(tick, 3000); });
+ }
+ tick();
+})();
+</script>
 
 	<?php
 }
