@@ -131,8 +131,20 @@ function pirate69_importer_action() {
         $category = sanitize_key($_POST['category'] ?? '');
         $type = sanitize_key($_POST['job_type'] ?? 'sync');
         $target = sanitize_text_field(wp_unslash($_POST['target'] ?? ''));
-        $result = pirate69_create_import_job($category, $type, $target);
-        $notice = is_wp_error($result) ? $result->get_error_message() : 'Import job #' . absint($result) . ' queued.';
+        if ('all' === $category && 'sync' === $type) {
+            $queued = array();
+            $errors = array();
+            foreach (array_keys(pirate69_source_categories()) as $catalog_key) {
+                $created = pirate69_create_import_job($catalog_key, 'sync', '');
+                if (is_wp_error($created)) $errors[] = $catalog_key . ': ' . $created->get_error_message();
+                else $queued[] = absint($created);
+            }
+            $notice = $queued ? 'Bulk import queued for ' . count($queued) . ' catalog(s). Job IDs: ' . implode(', ', $queued) : 'No bulk jobs were queued.';
+            if ($errors) $notice .= ' Issues: ' . implode(' | ', $errors);
+        } else {
+            $result = pirate69_create_import_job($category, $type, $target);
+            $notice = is_wp_error($result) ? $result->get_error_message() : 'Import job #' . absint($result) . ' queued.';
+        }
         delete_transient('p69_repository_stats');
     } elseif ($action === 'clear_logs') {
         global $wpdb; $wpdb->query("TRUNCATE TABLE {$wpdb->prefix}p69_import_logs"); $notice = 'Import activity cleared.';
@@ -204,7 +216,10 @@ function pirate69_render_importer_overview() {
         <?php if (isset($remote['errors'][$key])): ?><p class="p69-muted p69-error-text"><?php echo esc_html($remote['errors'][$key]); ?></p><?php endif; ?>
       <?php endforeach; ?>
       <p class="p69-footnote">Repository statistics are cached for five minutes. Use the refresh action to recalculate them.</p>
-      <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('p69_refresh_repo_stats'); ?><input type="hidden" name="action" value="p69_refresh_repo_stats"><button class="button">Refresh repository totals</button></form>
+      <div class="p69-bulk-actions">
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="start"><input type="hidden" name="category" value="all"><input type="hidden" name="job_type" value="sync"><input type="hidden" name="target" value=""><input type="hidden" name="return_page" value="pirate69-import-jobs"><button class="button button-primary" onclick="return confirm('Queue bulk imports for every source catalog? Existing active catalog jobs will be reused.');">Import all catalogs</button></form>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('p69_refresh_repo_stats'); ?><input type="hidden" name="action" value="p69_refresh_repo_stats"><button class="button">Refresh repository totals</button></form>
+      </div>
       </section>
       <section class="p69-admin-panel"><span class="p69-section-kicker">QUICK ACCESS</span><h2>Import operations</h2><p>Jump directly to the workflow you need. Each section has its own workspace.</p>
         <a class="p69-action-card" href="<?php echo esc_url(pirate69_importer_url('pirate69-repository-browser')); ?>"><span class="dashicons dashicons-search"></span><span><strong>Search repository</strong><small>Find titles and queue individual imports</small></span></a>
@@ -233,6 +248,10 @@ function pirate69_render_repository_browser() {
         <input type="search" name="q" value="<?php echo esc_attr($query); ?>" placeholder="Search movie title or source ID…" required>
         <button class="button button-primary">Search GitHub</button>
       </form>
+      <div class="p69-bulk-actions">
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><?php wp_nonce_field('pirate69_importer_action'); ?><input type="hidden" name="action" value="pirate69_importer_action"><input type="hidden" name="p69_action" value="start"><input type="hidden" name="category" value="<?php echo esc_attr($category); ?>"><input type="hidden" name="job_type" value="sync"><input type="hidden" name="target" value=""><input type="hidden" name="return_page" value="pirate69-import-jobs"><button class="button button-primary" onclick="return confirm('Queue a bulk import for the entire ' + <?php echo wp_json_encode($categories[$category]['label']); ?> + ' catalog?');">Bulk import this catalog</button></form>
+        <span class="p69-muted">Queues every valid record in this GitHub catalog. Existing imported records are updated only when changed.</span>
+      </div>
       <?php if($query!==''): ?>
         <?php if($error): ?><div class="notice notice-error inline"><p><?php echo esc_html($error); ?></p></div>
         <?php elseif(!$results): ?><p class="p69-empty">No matching records found in <?php echo esc_html($categories[$category]['label']); ?>.</p>
