@@ -9,7 +9,9 @@ get_header();
 	$quality = get_post_meta($post_id, '_p69_quality', true);
 	$category = get_post_meta($post_id, '_p69_source_category', true);
 	$source_url = get_post_meta($post_id, '_p69_source_url', true);
-	$source_id = get_post_meta($post_id, '_p69_source_id', true);
+	$single_design = get_option('pirate69_settings', array());
+	$single_design = is_array($single_design) ? sanitize_key($single_design['single_design'] ?? 'cinematic') : 'cinematic';
+	if (!in_array($single_design, array('cinematic', 'poster', 'compact'), true)) $single_design = 'cinematic';
 	$poster_fallback = esc_url(get_post_meta($post_id, '_p69_tmdb_poster_url', true));
 	if (!$poster_fallback) $poster_fallback = esc_url(get_post_meta($post_id, '_p69_original_poster_url', true));
 	$tmdb_rating = get_post_meta($post_id, '_p69_tmdb_rating', true);
@@ -44,7 +46,7 @@ get_header();
 	}
 	$post_type = get_post_type_object(get_post_type());
 ?>
-<article <?php post_class('p69-detail'); ?>>
+<article <?php post_class('p69-detail p69-design-' . $single_design); ?>>
 	<nav class="p69-breadcrumb" aria-label="<?php esc_attr_e('Breadcrumb', 'pirate69'); ?>">
 		<a href="<?php echo esc_url(home_url('/')); ?>"><?php esc_html_e('Home', 'pirate69'); ?></a>
 		<span aria-hidden="true">/</span>
@@ -93,7 +95,6 @@ get_header();
 			<?php if ($tmdb_runtime) : ?><div><dt>Runtime</dt><dd><?php echo esc_html($tmdb_runtime . ' minutes'); ?></dd></div><?php endif; ?>
 			<?php if ($tmdb_seasons) : ?><div><dt>Seasons</dt><dd><?php echo esc_html(number_format_i18n($tmdb_seasons)); ?></dd></div><?php endif; ?>
 			<?php if ($tmdb_episodes) : ?><div><dt>Episodes</dt><dd><?php echo esc_html(number_format_i18n($tmdb_episodes)); ?></dd></div><?php endif; ?>
-			<?php if ($source_id) : ?><div><dt><?php esc_html_e('Catalog ID', 'pirate69'); ?></dt><dd><?php echo esc_html($source_id); ?></dd></div><?php endif; ?>
 			<div><dt><?php esc_html_e('Added', 'pirate69'); ?></dt><dd><time datetime="<?php echo esc_attr(get_the_date('c')); ?>"><?php echo esc_html(get_the_date()); ?></time></dd></div>
 		</dl>
 		<?php
