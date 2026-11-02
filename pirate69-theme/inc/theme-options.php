@@ -8,13 +8,14 @@ function pirate69_sanitize_settings($input) {
 		'accent' => $accent ?: '#8b5cf6',
 		'posts_per_page' => max(6, min(48, absint($input['posts_per_page'] ?? 24))),
 		'show_hero' => empty($input['show_hero']) ? 0 : 1,
+		'single_design' => in_array(($input['single_design'] ?? 'cinematic'), array('cinematic','poster','compact'), true) ? $input['single_design'] : 'cinematic',
 	);
 }
 function pirate69_register_settings() {
 	register_setting('pirate69_settings', 'pirate69_settings', array(
 		'type' => 'array',
 		'sanitize_callback' => 'pirate69_sanitize_settings',
-		'default' => array('accent' => '#8b5cf6', 'posts_per_page' => 24, 'show_hero' => 1),
+		'default' => array('accent' => '#8b5cf6', 'posts_per_page' => 24, 'show_hero' => 1, 'single_design' => 'cinematic'),
 	));
 }
 function pirate69_add_options_page() {
@@ -22,7 +23,7 @@ function pirate69_add_options_page() {
 }
 function pirate69_render_options() {
 	if (!current_user_can('manage_options')) return;
-	$s = wp_parse_args(get_option('pirate69_settings', array()), array('accent' => '#8b5cf6', 'posts_per_page' => 24, 'show_hero' => 1));
+	$s = wp_parse_args(get_option('pirate69_settings', array()), array('accent' => '#8b5cf6', 'posts_per_page' => 24, 'show_hero' => 1, 'single_design' => 'cinematic'));
 	?>
 	<div class="wrap">
 		<h1>Pirate69 Settings</h1>
@@ -32,6 +33,14 @@ function pirate69_render_options() {
 				<tr><th><label for="p69-accent">Accent color</label></th><td><input id="p69-accent" type="color" name="pirate69_settings[accent]" value="<?php echo esc_attr($s['accent']); ?>"></td></tr>
 				<tr><th><label for="p69-count">Catalog items per page</label></th><td><input id="p69-count" type="number" min="6" max="48" name="pirate69_settings[posts_per_page]" value="<?php echo esc_attr($s['posts_per_page']); ?>"></td></tr>
 				<tr><th>Homepage hero</th><td><label><input type="checkbox" name="pirate69_settings[show_hero]" value="1" <?php checked($s['show_hero'], 1); ?>> Show cinematic hero section</label></td></tr>
+				<tr><th scope="row">Movie / TV detail page design</th><td>
+					<fieldset class="p69-design-choices">
+						<label class="p69-design-choice"><input type="radio" name="pirate69_settings[single_design]" value="cinematic" <?php checked($s['single_design'], 'cinematic'); ?>><span class="p69-design-preview p69-preview-cinematic"></span><strong>Cinematic</strong><small>Backdrop atmosphere, large poster and spacious details.</small></label>
+						<label class="p69-design-choice"><input type="radio" name="pirate69_settings[single_design]" value="poster" <?php checked($s['single_design'], 'poster'); ?>><span class="p69-design-preview p69-preview-poster"></span><strong>Poster Focus</strong><small>Large artwork, balanced title panel and rich metadata.</small></label>
+						<label class="p69-design-choice"><input type="radio" name="pirate69_settings[single_design]" value="compact" <?php checked($s['single_design'], 'compact'); ?>><span class="p69-design-preview p69-preview-compact"></span><strong>Compact</strong><small>Smaller hero, tighter spacing and quick access to downloads.</small></label>
+					</fieldset>
+					<p class="description">Choose the layout used on individual movie and TV series pages. You can change it any time.</p>
+				</td></tr>
 			</table>
 			<?php submit_button(); ?>
 		</form>
