@@ -10,6 +10,7 @@ get_header();
 	$category = get_post_meta($post_id, '_p69_source_category', true);
 	$source_url = get_post_meta($post_id, '_p69_source_url', true);
 	$source_id = get_post_meta($post_id, '_p69_source_id', true);
+	$poster_fallback = esc_url(get_post_meta($post_id, '_p69_original_poster_url', true));
 	$links = array();
 	global $wpdb;
 	$table = $wpdb->prefix . 'p69_download_links';
@@ -38,7 +39,7 @@ get_header();
 
 	<section class="p69-detail-hero">
 		<div class="p69-detail-poster">
-			<?php if (has_post_thumbnail()) : the_post_thumbnail('large', array('loading' => 'eager')); else : ?>
+			<?php if (has_post_thumbnail()) : the_post_thumbnail('large', array('loading' => 'eager')); elseif ($poster_fallback) : ?><img src="<?php echo esc_url($poster_fallback); ?>" alt="<?php echo esc_attr(get_the_title()); ?>" loading="eager" decoding="async"><?php else : ?>
 				<div class="poster-placeholder"><b>P69</b><small><?php esc_html_e('POSTER PENDING', 'pirate69'); ?></small></div>
 			<?php endif; ?>
 		</div>
