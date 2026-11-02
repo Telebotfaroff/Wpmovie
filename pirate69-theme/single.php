@@ -19,6 +19,14 @@ get_header();
 	$tmdb_directors = get_post_meta($post_id, '_p69_tmdb_directors', true);
 	$tmdb_genres = get_post_meta($post_id, '_p69_tmdb_genres', true);
 	$tmdb_backdrop = esc_url(get_post_meta($post_id, '_p69_tmdb_backdrop_url', true));
+	$tmdb_companies = get_post_meta($post_id, '_p69_tmdb_companies', true);
+	$tmdb_countries = get_post_meta($post_id, '_p69_tmdb_countries', true);
+	$tmdb_languages = get_post_meta($post_id, '_p69_tmdb_languages', true);
+	$tmdb_networks = get_post_meta($post_id, '_p69_tmdb_networks', true);
+	$tmdb_creators = get_post_meta($post_id, '_p69_tmdb_creators', true);
+	$tmdb_seasons = absint(get_post_meta($post_id, '_p69_tmdb_season_count', true));
+	$tmdb_episodes = absint(get_post_meta($post_id, '_p69_tmdb_episode_count', true));
+	$tmdb_trailers = get_post_meta($post_id, '_p69_tmdb_trailers', true);
 	$links = array();
 	global $wpdb;
 	$table = $wpdb->prefix . 'p69_download_links';
@@ -83,6 +91,8 @@ get_header();
 			<?php if ($quality) : ?><div><dt><?php esc_html_e('Available quality', 'pirate69'); ?></dt><dd><?php echo esc_html($quality); ?></dd></div><?php endif; ?>
 			<?php if ($tmdb_rating !== '' && $tmdb_rating !== false) : ?><div><dt>TMDB rating</dt><dd><?php echo esc_html(number_format_i18n((float) $tmdb_rating, 1)); ?>/10</dd></div><?php endif; ?>
 			<?php if ($tmdb_runtime) : ?><div><dt>Runtime</dt><dd><?php echo esc_html($tmdb_runtime . ' minutes'); ?></dd></div><?php endif; ?>
+			<?php if ($tmdb_seasons) : ?><div><dt>Seasons</dt><dd><?php echo esc_html(number_format_i18n($tmdb_seasons)); ?></dd></div><?php endif; ?>
+			<?php if ($tmdb_episodes) : ?><div><dt>Episodes</dt><dd><?php echo esc_html(number_format_i18n($tmdb_episodes)); ?></dd></div><?php endif; ?>
 			<?php if ($source_id) : ?><div><dt><?php esc_html_e('Catalog ID', 'pirate69'); ?></dt><dd><?php echo esc_html($source_id); ?></dd></div><?php endif; ?>
 			<div><dt><?php esc_html_e('Added', 'pirate69'); ?></dt><dd><time datetime="<?php echo esc_attr(get_the_date('c')); ?>"><?php echo esc_html(get_the_date()); ?></time></dd></div>
 		</dl>
@@ -99,6 +109,12 @@ get_header();
 		<?php if (is_array($tmdb_genres) && $tmdb_genres) : ?><div class="p69-term-list"><strong>TMDB genres</strong><?php foreach ($tmdb_genres as $genre) : ?><span><?php echo esc_html($genre); ?></span><?php endforeach; ?></div><?php endif; ?>
 		<?php if (is_array($tmdb_directors) && $tmdb_directors) : ?><div class="p69-term-list"><strong>Director</strong><span><?php echo esc_html(implode(', ', $tmdb_directors)); ?></span></div><?php endif; ?>
 		<?php if (is_array($tmdb_cast) && $tmdb_cast) : ?><div class="p69-term-list"><strong>Cast</strong><span><?php echo esc_html(implode(', ', $tmdb_cast)); ?></span></div><?php endif; ?>
+		<?php if (is_array($tmdb_creators) && $tmdb_creators) : ?><div class="p69-term-list"><strong>Created by</strong><span><?php echo esc_html(implode(', ', $tmdb_creators)); ?></span></div><?php endif; ?>
+		<?php if (is_array($tmdb_companies) && $tmdb_companies) : ?><div class="p69-term-list"><strong>Production</strong><span><?php echo esc_html(implode(', ', $tmdb_companies)); ?></span></div><?php endif; ?>
+		<?php if (is_array($tmdb_networks) && $tmdb_networks) : ?><div class="p69-term-list"><strong>Networks</strong><span><?php echo esc_html(implode(', ', $tmdb_networks)); ?></span></div><?php endif; ?>
+		<?php if (is_array($tmdb_countries) && $tmdb_countries) : ?><div class="p69-term-list"><strong>Countries</strong><span><?php echo esc_html(implode(', ', $tmdb_countries)); ?></span></div><?php endif; ?>
+		<?php if (is_array($tmdb_languages) && $tmdb_languages) : ?><div class="p69-term-list"><strong>Original languages</strong><span><?php echo esc_html(implode(', ', $tmdb_languages)); ?></span></div><?php endif; ?>
+		<?php if (is_array($tmdb_trailers) && $tmdb_trailers) : ?><div class="p69-term-list"><strong>Trailer</strong><?php foreach (array_slice($tmdb_trailers, 0, 2) as $trailer) : ?><a href="<?php echo esc_url($trailer); ?>" target="_blank" rel="noopener noreferrer">Watch trailer ↗</a><?php endforeach; ?></div><?php endif; ?>
 	</section>
 
 	<section id="p69-downloads" class="p69-download-section">
