@@ -53,8 +53,8 @@ final class P69MM_GitHub_Updater {
 
         $release = self::release();
         $package = self::package_url($release);
-        $version = isset($release['tag_name']) ? trim($release['tag_name']) : '';
-        $version = preg_replace('/^plugin-v/i', '', $version);
+        $version = '';
+        if (!empty($release['tag_name']) && preg_match('/plugin-v(\\d+\\.\\d+\\.\\d+)/i', $release['tag_name'], $match)) $version = $match[1];
 
         if (!$package || !$version || !preg_match('/^\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]+)?$/', $version)) return $transient;
 
@@ -78,7 +78,8 @@ final class P69MM_GitHub_Updater {
     public static function plugin_information($result, $action, $args) {
         if ('plugin_information' !== $action || empty($args->slug) || 'pirate69-movie-manager' !== $args->slug) return $result;
         $release = self::release();
-        $version = isset($release['tag_name']) ? preg_replace('/^plugin-v/i', '', trim($release['tag_name'])) : '';
+        $version = '';
+        if (!empty($release['tag_name']) && preg_match('/plugin-v(\\d+\\.\\d+\\.\\d+)/i', $release['tag_name'], $match)) $version = $match[1];
         if (!$version) return $result;
         $info = new stdClass();
         $info->name = 'Pirate69 Movie Manager';
