@@ -24,7 +24,6 @@ require_once P69MM_DIR . 'includes/tmdb.php';
 if (is_admin()) {
 	require_once P69MM_DIR . 'admin/importer.php';
 	require_once P69MM_DIR . 'admin/settings.php';
-	require_once P69MM_DIR . 'admin/tmdb-manager.php';
 }
 
 function p69mm_activate() {
