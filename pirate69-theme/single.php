@@ -120,22 +120,34 @@ get_header();
 
 	<section id="p69-downloads" class="p69-download-section">
 		<div class="section-heading"><div><p class="eyebrow"><?php esc_html_e('GET YOUR COPY', 'pirate69'); ?></p><h2><?php esc_html_e('Download links', 'pirate69'); ?></h2></div><span class="p69-link-count"><?php echo esc_html(sprintf(_n('%s link', '%s links', count($links), 'pirate69'), number_format_i18n(count($links)))); ?></span></div>
-		<?php if ($groups) : foreach ($groups as $group_name => $group_links) : ?>
-			<div class="p69-download-group">
-				<h3><?php echo esc_html($group_name); ?></h3>
-				<div class="p69-download-list">
-					<?php foreach ($group_links as $link) :
-						$label = $link['label'] ?: ($link['server'] ?: __('Download', 'pirate69'));
-						$meta = array_filter(array($link['server'], $link['file_size'], $link['audio']));
-					?>
-						<div class="p69-download-row">
-							<div class="p69-download-copy"><strong><?php echo esc_html($label); ?></strong><?php if ($meta) : ?><small><?php echo esc_html(implode(' · ', $meta)); ?></small><?php endif; ?></div>
-							<a class="p69-download-button" href="<?php echo esc_url($link['url']); ?>" target="_blank" rel="nofollow sponsored noopener noreferrer"><?php esc_html_e('Open link', 'pirate69'); ?> <span aria-hidden="true">↗</span></a>
-						</div>
-					<?php endforeach; ?>
+		<?php if ($groups) : ?>
+			<div class="p69-download-toolbar">
+				<div><strong><?php esc_html_e('Choose your quality', 'pirate69'); ?></strong><small><?php esc_html_e('Select a quality to find available servers', 'pirate69'); ?></small></div>
+				<div class="p69-quality-filters" role="group" aria-label="<?php esc_attr_e('Filter by quality', 'pirate69'); ?>">
+					<button type="button" class="is-active" data-p69-quality="all">All</button>
+					<?php foreach (array_keys($groups) as $group_name) : ?><button type="button" data-p69-quality="<?php echo esc_attr($group_name); ?>"><?php echo esc_html($group_name); ?></button><?php endforeach; ?>
 				</div>
 			</div>
-		<?php endforeach; else : ?>
+			<div class="p69-download-groups">
+			<?php foreach ($groups as $group_name => $group_links) : ?>
+				<section class="p69-download-group" data-p69-download-group="<?php echo esc_attr($group_name); ?>">
+					<div class="p69-download-group-heading"><h3><?php echo esc_html($group_name); ?></h3><span><?php echo esc_html(sprintf(_n('%s server', '%s servers', count($group_links), 'pirate69'), number_format_i18n(count($group_links)))); ?></span></div>
+					<div class="p69-download-list">
+					<?php foreach ($group_links as $link) :
+						$label = $link['label'] ?: ($link['server'] ?: __('Download', 'pirate69'));
+						$server = $link['server'] ?: __('Direct link', 'pirate69');
+						?>
+						<article class="p69-download-card">
+							<div class="p69-download-server-icon" aria-hidden="true">↗</div>
+							<div class="p69-download-copy"><strong><?php echo esc_html($label); ?></strong><div class="p69-download-meta"><span class="p69-server-badge"><?php echo esc_html($server); ?></span><?php if ($link['file_size']) : ?><span><?php echo esc_html($link['file_size']); ?></span><?php endif; ?><?php if ($link['audio']) : ?><span><?php echo esc_html($link['audio']); ?></span><?php endif; ?></div></div>
+							<a class="p69-download-button" href="<?php echo esc_url($link['url']); ?>" target="_blank" rel="nofollow sponsored noopener noreferrer"><?php esc_html_e('Download', 'pirate69'); ?> <span aria-hidden="true">↗</span></a>
+						</article>
+					<?php endforeach; ?>
+					</div>
+				</section>
+			<?php endforeach; ?>
+			</div>
+		<?php else : ?>
 			<div class="empty-state"><div class="empty-icon">↗</div><h3><?php esc_html_e('No download links yet', 'pirate69'); ?></h3><p><?php esc_html_e('Download options will appear here when they are added to this title.', 'pirate69'); ?></p></div>
 		<?php endif; ?>
 	</section>
