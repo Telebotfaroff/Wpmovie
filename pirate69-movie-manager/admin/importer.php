@@ -33,6 +33,22 @@ function pirate69_importer_action() {
 }
 add_action('admin_post_pirate69_importer_action','pirate69_importer_action');
 
+function pirate69_ajax_import_worker() {
+	if (!current_user_can('manage_options')) wp_send_json_error(array('message' => 'Not allowed.'), 403);
+	check_ajax_referer('pirate69_import_worker', 'nonce');
+	$job_id = absint($_POST['job_id'] ?? 0);
+	global $wpdb;
+	$table = $wpdb->prefix . 'p69_import_jobs';
+	$before = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $job_id), ARRAY_A);
+	if (!$before) wp_send_json_error(array('message' => 'Job not found.'), 404);
+	if (in_array($before['status'], array('pending', 'running'), true)) pirate69_process_import_job($job_id);
+	$job = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $job_id), ARRAY_A);
+	wp_send_json_success(array('id' => $job_id, 'status' => $job['status'], 'total' => (int) $job['total_items'], 'processed' => (int) $job['processed_items'], 'created' => (int) $job['created_count'], 'updated' => (int) $job['updated_count'], 'skipped' => (int) $job['skipped_count'], 'errors' => (int) $job['error_count']));
+}
+add_action('wp_ajax_pirate69_import_worker', 'pirate69_ajax_import_worker');
+
+
+
 function pirate69_render_job_action($category, $job_type, $target, $label) {
 	?>
 	<form class="p69-inline-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
