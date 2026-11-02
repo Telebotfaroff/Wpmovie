@@ -18,6 +18,9 @@ function pirate69_tmdb_request($path, $args = array()) {
 	$token = trim((string) $settings['tmdb_token']);
 	if (!$token) return new WP_Error('p69_tmdb_no_token', 'Add your TMDB API Read Access Token in Importer Settings.');
 	$url = add_query_arg(array_merge(array('language' => $settings['tmdb_language']), $args), 'https://api.themoviedb.org/3/' . ltrim($path, '/'));
+	$cache_key = 'p69_tmdb_' . md5($url);
+	$cached = get_transient($cache_key);
+	if (is_array($cached)) return $cached;
 	$response = wp_remote_get($url, array(
 		'timeout' => 18,
 		'headers' => array('Authorization' => 'Bearer ' . $token, 'Accept' => 'application/json'),
@@ -30,6 +33,8 @@ function pirate69_tmdb_request($path, $args = array()) {
 		$message = is_array($data) && !empty($data['status_message']) ? $data['status_message'] : 'TMDB request failed (HTTP ' . $code . ').';
 		return new WP_Error('p69_tmdb_http', sanitize_text_field($message));
 	}
+	$ttl = (strpos($path, 'search/') === 0) ? 15 * MINUTE_IN_SECONDS : 12 * HOUR_IN_SECONDS;
+	set_transient($cache_key, $data, $ttl);
 	return $data;
 }
 
