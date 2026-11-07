@@ -140,3 +140,6 @@
  .p69-download-card{align-items:flex-start}
  .p69-download-button{align-self:center}
 }
+
+.p69-recommended-badge{display:inline-flex;align-self:flex-start;margin-top:2px;padding:2px 7px;border:1px solid #8b5cf655;border-radius:5px;background:#8b5cf618;color:#c4b5fd;font-size:9px;font-weight:700}
+.p69-report-notice{margin:0 0 14px;padding:11px 14px;border:1px solid #8b5cf655;border-radius:10px;background:#8b5cf614;color:#ddd0ff;font-size:12px}
