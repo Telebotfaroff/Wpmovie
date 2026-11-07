@@ -29,13 +29,19 @@ get_header();
 	$tmdb_seasons = absint(get_post_meta($post_id, '_p69_tmdb_season_count', true));
 	$tmdb_episodes = absint(get_post_meta($post_id, '_p69_tmdb_episode_count', true));
 	$tmdb_trailers = get_post_meta($post_id, '_p69_tmdb_trailers', true);
+	$tmdb_title = trim((string) get_post_meta($post_id, '_p69_tmdb_title', true));
+	$season_number = absint(get_post_meta($post_id, '_p69_season', true));
+	$display_title = $tmdb_title ?: get_the_title($post_id);
+	$explicit_excerpt = trim((string) get_post_field('post_excerpt', $post_id));
+	$content_text = trim(wp_strip_all_tags((string) get_post_field('post_content', $post_id)));
+	$show_hero_excerpt = $explicit_excerpt && ('' === $content_text || wp_strip_all_tags($explicit_excerpt) !== $content_text);
 	$links = array();
 	global $wpdb;
 	$table = $wpdb->prefix . 'p69_download_links';
 	$table_exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
 	if ($table_exists === $table) {
 		$links = $wpdb->get_results($wpdb->prepare(
-			"SELECT id, label, url, quality, file_size, audio, server FROM {$table} WHERE post_id = %d AND is_enabled = 1 ORDER BY sort_order ASC, id ASC",
+			"SELECT id, label, url, quality, file_size, audio, server, season, episode, is_batch FROM {$table} WHERE post_id = %d AND is_enabled = 1 ORDER BY sort_order ASC, id ASC",
 			$post_id
 		), ARRAY_A);
 	}
@@ -45,6 +51,13 @@ get_header();
 		$groups[$group][] = $link;
 	}
 	$post_type = get_post_type_object(get_post_type());
+	$quality_summary = $groups ? implode(', ', array_keys($groups)) : ($quality ?: '');
+	$audio_languages = array();
+	foreach ($links as $download_link) {
+		$audio_value = trim((string) ($download_link['audio'] ?? ''));
+		if ($audio_value !== '') $audio_languages[$audio_value] = true;
+	}
+	$audio_summary = implode(', ', array_keys($audio_languages));
 ?>
 <article <?php post_class('p69-detail p69-design-' . $single_design); ?>>
 	<nav class="p69-breadcrumb" aria-label="<?php esc_attr_e('Breadcrumb', 'pirate69'); ?>">
@@ -52,7 +65,7 @@ get_header();
 		<span aria-hidden="true">/</span>
 		<a href="<?php echo esc_url(get_post_type_archive_link(get_post_type())); ?>"><?php echo esc_html($post_type ? $post_type->labels->name : __('Catalog', 'pirate69')); ?></a>
 		<span aria-hidden="true">/</span>
-		<span><?php the_title(); ?></span>
+		<span aria-current="page"><?php echo esc_html($display_title); ?></span>
 	</nav>
 
 	<section class="p69-detail-hero"<?php if ($tmdb_backdrop) : ?> style="--p69-tmdb-backdrop:url('<?php echo esc_url($tmdb_backdrop); ?>')"<?php endif; ?>>
@@ -63,7 +76,7 @@ get_header();
 		</div>
 		<div class="p69-detail-main">
 			<p class="eyebrow"><?php echo esc_html($post_type ? $post_type->labels->singular_name : __('Catalog title', 'pirate69')); ?></p>
-			<h1><?php the_title(); ?></h1>
+			<h1><?php echo esc_html($display_title); ?><?php if ($year) : ?> <span class="p69-title-year">(<?php echo esc_html($year); ?>)</span><?php endif; ?><?php if ($season_number) : ?> <span class="p69-title-season">– <?php echo esc_html(sprintf(__('Season %s', 'pirate69'), number_format_i18n($season_number))); ?></span><?php endif; ?></h1>
 			<?php if ($tmdb_tagline) : ?><p class="p69-tmdb-tagline"><?php echo esc_html($tmdb_tagline); ?></p><?php endif; ?>
 			<div class="p69-detail-tags">
 				<?php if ($year) : ?><span><?php echo esc_html($year); ?></span><?php endif; ?>
@@ -76,8 +89,8 @@ get_header();
 					foreach ($industries as $industry) : ?><span><?php echo esc_html($industry->name); ?></span><?php endforeach;
 				elseif ($category) : ?><span><?php echo esc_html(ucwords(str_replace('-', ' ', $category))); ?></span><?php endif; ?>
 			</div>
-			<?php if (has_excerpt() || get_the_content()) : ?>
-				<div class="p69-description"><?php the_excerpt(); ?></div>
+			<?php if ($show_hero_excerpt) : ?>
+				<div class="p69-description"><?php echo esc_html(wp_trim_words($explicit_excerpt, 34)); ?></div>
 			<?php endif; ?>
 			<div class="p69-detail-actions">
 				<a class="button button-primary" href="#p69-downloads"><?php esc_html_e('View download links', 'pirate69'); ?> <span aria-hidden="true">↓</span></a>
@@ -90,7 +103,9 @@ get_header();
 		<h2><?php esc_html_e('Title information', 'pirate69'); ?></h2>
 		<dl class="p69-info-grid">
 			<?php if ($year) : ?><div><dt><?php esc_html_e('Release year', 'pirate69'); ?></dt><dd><?php echo esc_html($year); ?></dd></div><?php endif; ?>
-			<?php if ($quality) : ?><div><dt><?php esc_html_e('Available quality', 'pirate69'); ?></dt><dd><?php echo esc_html($quality); ?></dd></div><?php endif; ?>
+			<?php if ($quality_summary) : ?><div><dt><?php esc_html_e('Available quality', 'pirate69'); ?></dt><dd><?php echo esc_html($quality_summary); ?></dd></div><?php endif; ?>
+			<?php if ($season_number) : ?><div><dt><?php esc_html_e('Season', 'pirate69'); ?></dt><dd><?php echo esc_html(number_format_i18n($season_number)); ?></dd></div><?php endif; ?>
+			<?php if ($audio_summary) : ?><div><dt><?php esc_html_e('Download audio', 'pirate69'); ?></dt><dd><?php echo esc_html($audio_summary); ?></dd></div><?php endif; ?>
 			<?php if ($tmdb_rating !== '' && $tmdb_rating !== false) : ?><div><dt>TMDB rating</dt><dd><?php echo esc_html(number_format_i18n((float) $tmdb_rating, 1)); ?>/10</dd></div><?php endif; ?>
 			<?php if ($tmdb_runtime) : ?><div><dt>Runtime</dt><dd><?php echo esc_html($tmdb_runtime . ' minutes'); ?></dd></div><?php endif; ?>
 			<?php if ($tmdb_seasons) : ?><div><dt>Seasons</dt><dd><?php echo esc_html(number_format_i18n($tmdb_seasons)); ?></dd></div><?php endif; ?>
@@ -139,7 +154,7 @@ get_header();
 						?>
 						<article class="p69-download-card">
 							<div class="p69-download-server-icon" aria-hidden="true">↗</div>
-							<div class="p69-download-copy"><strong><?php echo esc_html($label); ?></strong><div class="p69-download-meta"><span class="p69-server-badge"><?php echo esc_html($server); ?></span><?php if ($link['file_size']) : ?><span><?php echo esc_html($link['file_size']); ?></span><?php endif; ?><?php if ($link['audio']) : ?><span><?php echo esc_html($link['audio']); ?></span><?php endif; ?></div></div>
+							<div class="p69-download-copy"><strong><?php echo esc_html($label); ?></strong><div class="p69-download-meta"><span class="p69-server-badge"><?php echo esc_html($server); ?></span><?php if ($link['file_size']) : ?><span><?php echo esc_html($link['file_size']); ?></span><?php endif; ?><?php if ($link['audio']) : ?><span><?php echo esc_html($link['audio']); ?></span><?php endif; ?><?php if (!empty($link['season'])) : ?><span><?php echo esc_html(sprintf(__('Season %s', 'pirate69'), number_format_i18n(absint($link['season'])))); ?></span><?php endif; ?><?php if (!empty($link['episode'])) : ?><span><?php echo esc_html(sprintf(__('Episode %s', 'pirate69'), sanitize_text_field($link['episode']))); ?></span><?php endif; ?><?php if (!empty($link['is_batch'])) : ?><span class="p69-batch-badge"><?php esc_html_e('Full season pack', 'pirate69'); ?></span><?php endif; ?></div></div>
 							<a class="p69-download-button" href="<?php echo esc_url($link['url']); ?>" target="_blank" rel="nofollow sponsored noopener noreferrer"><?php esc_html_e('Download', 'pirate69'); ?> <span aria-hidden="true">↗</span></a>
 						</article>
 					<?php endforeach; ?>
@@ -152,7 +167,7 @@ get_header();
 		<?php endif; ?>
 	</section>
 
-	<?php if (trim(get_the_content())) : ?><section class="p69-editorial-content"><h2><?php esc_html_e('About this title', 'pirate69'); ?></h2><div class="entry-content"><?php the_content(); ?></div></section><?php endif; ?>
+	<?php if ($content_text) : ?><section class="p69-editorial-content"><h2><?php esc_html_e('About this title', 'pirate69'); ?></h2><div class="entry-content"><?php the_content(); ?></div></section><?php endif; ?>
 </article>
 <?php endwhile; ?>
 </main>
