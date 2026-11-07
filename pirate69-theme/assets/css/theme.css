@@ -73,3 +73,33 @@
  .p69-pagination a,.p69-pagination span{min-width:42px;height:44px;padding:0 12px;font-size:12px}
  .p69-pagination .prev,.p69-pagination .next{min-width:96px}
 }
+
+/* Detail page polish: cleaner title hierarchy, denser metadata and resilient mobile layout */
+.p69-breadcrumb{min-width:0}
+.p69-breadcrumb span[aria-current="page"]{min-width:0;max-width:min(620px,58vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p69-detail-main h1{overflow-wrap:anywhere}
+.p69-title-year{color:var(--accent2);font-size:.72em;white-space:nowrap}
+.p69-title-season{font-size:.72em;color:#c9c1da}
+.p69-info-grid{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}
+.p69-info-grid>div{min-width:0;padding:2px 0}
+.p69-info-grid dd{line-height:1.45}
+.p69-download-group-heading{margin-bottom:12px}
+.p69-download-card{min-width:0}
+.p69-download-copy{overflow-wrap:anywhere}
+.p69-batch-badge{color:#c4b5fd;border:1px solid #8b5cf655;background:#8b5cf615;border-radius:5px;padding:3px 7px}
+@media(max-width:700px){
+ .p69-breadcrumb{gap:6px;margin-bottom:18px;flex-wrap:nowrap;overflow:hidden}
+ .p69-breadcrumb a,.p69-breadcrumb span{flex:0 0 auto}
+ .p69-breadcrumb span[aria-current="page"]{flex:1 1 auto;max-width:none}
+ .p69-detail-hero{align-items:center}
+ .p69-detail-main h1{font-size:clamp(20px,5.7vw,25px);line-height:1.16;letter-spacing:-.7px}
+ .p69-title-year,.p69-title-season{white-space:normal}
+ .p69-info-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 16px}
+ .p69-info-panel{margin-top:24px}
+ .p69-download-section,.p69-editorial-content{margin-top:28px}
+ .p69-download-toolbar{gap:12px}
+ .p69-quality-filters{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}
+ .p69-quality-filters button{flex:0 0 auto;white-space:nowrap}
+ .p69-download-card{align-items:center}
+ .p69-download-copy strong{display:block;line-height:1.4}
+}
