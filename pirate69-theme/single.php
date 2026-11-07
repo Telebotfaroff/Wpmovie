@@ -154,6 +154,9 @@ get_header();
 		}
 		$first_quality = $groups ? (string) array_key_first($groups) : '';
 		?>
+		<?php if (isset($_GET['p69_report'])) : $report_state = sanitize_key(wp_unslash($_GET['p69_report'])); ?>
+			<div class="p69-report-notice" role="status"><?php echo $report_state === 'received' ? esc_html__('Thanks. Your broken-link report has been sent to the site team.', 'pirate69') : esc_html__('You have already reported this link recently. Thank you.', 'pirate69'); ?></div>
+		<?php endif; ?>
 		<div class="section-heading"><div><p class="eyebrow"><?php esc_html_e('GET YOUR COPY', 'pirate69'); ?></p><h2><?php esc_html_e('Download links', 'pirate69'); ?></h2></div><span class="p69-link-count"><?php echo esc_html(sprintf(_n('%s link', '%s links', count($links), 'pirate69'), number_format_i18n(count($links)))); ?></span></div>
 		<?php if ($groups) : ?>
 			<div class="p69-quality-picker" aria-label="<?php esc_attr_e('Available video qualities', 'pirate69'); ?>">
@@ -182,7 +185,7 @@ get_header();
 				<section class="p69-download-group" data-p69-download-group="<?php echo esc_attr($group_name); ?>" <?php echo $group_name !== $first_quality ? 'hidden' : ''; ?>>
 					<div class="p69-download-group-heading"><h3><?php echo esc_html($group_name); ?></h3><span><?php echo esc_html(sprintf(_n('%s server', '%s servers', count($group_links), 'pirate69'), number_format_i18n(count($group_links)))); ?></span></div>
 					<div class="p69-download-list">
-					<?php foreach ($group_links as $link) :
+					<?php foreach ($group_links as $link_index => $link) :
 						$label = $link['label'] ?: ($link['server'] ?: __('Download', 'pirate69'));
 						$server = $link['server'] ?: __('Direct link', 'pirate69');
 						$server_key = strtolower(trim((string) $server . ' ' . (string) $label));
@@ -192,7 +195,7 @@ get_header();
 						<article class="p69-download-card" data-p69-server-type="<?php echo esc_attr($server_type); ?>" data-p69-audio="<?php echo esc_attr($link_audio); ?>">
 							<div class="p69-download-server-icon" aria-hidden="true"><span>↗</span></div>
 							<div class="p69-download-copy">
-								<strong><?php echo esc_html($label); ?></strong>
+								<strong><?php echo esc_html($label); ?></strong><?php if (0 === $link_index) : ?><span class="p69-recommended-badge"><?php esc_html_e('Recommended', 'pirate69'); ?></span><?php endif; ?>
 								<div class="p69-download-meta">
 									<span class="p69-server-badge"><?php echo esc_html($server); ?></span>
 									<?php if ($link['file_size']) : ?><span><?php echo esc_html($link['file_size']); ?></span><?php endif; ?>
