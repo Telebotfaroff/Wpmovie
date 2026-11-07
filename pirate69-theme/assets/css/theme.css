@@ -103,3 +103,40 @@
  .p69-download-card{align-items:center}
  .p69-download-copy strong{display:block;line-height:1.4}
 }
+
+
+/* Download center: quality-first selection, compact server filters and report actions */
+.p69-quality-picker{padding:18px 20px;margin:18px 0 14px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(110deg,#171326,#11111b)}
+.p69-quality-picker-heading{display:flex;flex-direction:column;gap:3px;margin-bottom:13px}
+.p69-quality-picker-heading strong{font-size:14px}
+.p69-quality-picker-heading span{font-size:11px;color:var(--muted)}
+.p69-quality-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}
+.p69-quality-option{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;border:1px solid var(--line);border-radius:11px;background:#ffffff06;color:var(--text);text-align:left;cursor:pointer;transition:border-color .18s,background .18s}
+.p69-quality-option strong{font-size:13px;line-height:1.35}
+.p69-quality-option span{font-size:11px;color:var(--muted)}
+.p69-quality-option small{font-size:10px;color:var(--accent2)}
+.p69-quality-option:hover,.p69-quality-option.is-active{border-color:var(--accent);background:#8b5cf622}
+.p69-download-filters{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0 20px}
+.p69-server-type-filters{display:flex;gap:7px;flex-wrap:wrap}
+.p69-server-type-filters button{padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:#ffffff06;color:#c9c3d8;font-size:11px;cursor:pointer}
+.p69-server-type-filters button.is-active,.p69-server-type-filters button:hover{border-color:var(--accent);background:#8b5cf622;color:#fff}
+.p69-audio-filter{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px}
+.p69-audio-filter select{max-width:180px;padding:7px 28px 7px 10px;border:1px solid var(--line);border-radius:8px;background:#171522;color:var(--text);font:inherit}
+.p69-download-card[hidden],.p69-download-group[hidden],.p69-no-filter-results[hidden]{display:none!important}
+.p69-server-type-label{color:#c4b5fd}
+.p69-report-link-form{margin-top:3px}
+.p69-report-link-form button{padding:0;border:0;background:none;color:var(--muted);font:inherit;font-size:10px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.p69-report-link-form button:hover{color:#fca5a5}
+.p69-no-filter-results{padding:14px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:12px;text-align:center}
+@media(max-width:600px){
+ .p69-quality-picker{padding:14px}
+ .p69-quality-options{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .p69-quality-option{padding:10px}
+ .p69-download-filters{align-items:flex-start}
+ .p69-server-type-filters{width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:3px}
+ .p69-server-type-filters button{flex:0 0 auto}
+ .p69-audio-filter{width:100%;justify-content:space-between}
+ .p69-audio-filter select{flex:1;max-width:none}
+ .p69-download-card{align-items:flex-start}
+ .p69-download-button{align-self:center}
+}
