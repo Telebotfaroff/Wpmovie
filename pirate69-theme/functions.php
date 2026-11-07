@@ -1,7 +1,7 @@
 <?php
 defined('ABSPATH') || exit;
 
-if (!defined('PIRATE69_VERSION')) define('PIRATE69_VERSION', '1.0.10');
+if (!defined('PIRATE69_VERSION')) define('PIRATE69_VERSION', '1.0.11');
 if (!defined('PIRATE69_DIR')) define('PIRATE69_DIR', get_template_directory());
 if (!defined('PIRATE69_URI')) define('PIRATE69_URI', get_template_directory_uri());
 
