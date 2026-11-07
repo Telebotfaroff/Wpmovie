@@ -134,31 +134,87 @@ get_header();
 	</section>
 
 	<section id="p69-downloads" class="p69-download-section">
+		<?php
+		$quality_stats = array();
+		$audio_options = array();
+		$server_types = array();
+		foreach ($groups as $group_name => $group_links) {
+			$sizes = array();
+			foreach ($group_links as $item) {
+				$size = trim((string) ($item['file_size'] ?? ''));
+				if ($size !== '') $sizes[$size] = true;
+				$audio = trim((string) ($item['audio'] ?? ''));
+				if ($audio !== '') $audio_options[$audio] = true;
+				$server_name = strtolower(trim((string) ($item['server'] ?? '')));
+				$label_name = strtolower(trim((string) ($item['label'] ?? '')));
+				$type = (strpos($server_name . ' ' . $label_name, 'resum') !== false || strpos($server_name . ' ' . $label_name, 'v-cloud') !== false) ? 'resumable' : ((strpos($server_name . ' ' . $label_name, 'batch') !== false || strpos($server_name . ' ' . $label_name, 'zip') !== false || strpos($server_name . ' ' . $label_name, 'nexdrive') !== false) ? 'batch' : 'instant');
+				$server_types[$type] = true;
+			}
+			$quality_stats[$group_name] = array('count' => count($group_links), 'sizes' => array_keys($sizes));
+		}
+		$first_quality = $groups ? (string) array_key_first($groups) : '';
+		?>
 		<div class="section-heading"><div><p class="eyebrow"><?php esc_html_e('GET YOUR COPY', 'pirate69'); ?></p><h2><?php esc_html_e('Download links', 'pirate69'); ?></h2></div><span class="p69-link-count"><?php echo esc_html(sprintf(_n('%s link', '%s links', count($links), 'pirate69'), number_format_i18n(count($links)))); ?></span></div>
 		<?php if ($groups) : ?>
-			<div class="p69-download-toolbar">
-				<div><strong><?php esc_html_e('Choose your quality', 'pirate69'); ?></strong><small><?php esc_html_e('Select a quality to find available servers', 'pirate69'); ?></small></div>
-				<div class="p69-quality-filters" role="group" aria-label="<?php esc_attr_e('Filter by quality', 'pirate69'); ?>">
-					<button type="button" class="is-active" data-p69-quality="all">All</button>
-					<?php foreach (array_keys($groups) as $group_name) : ?><button type="button" data-p69-quality="<?php echo esc_attr($group_name); ?>"><?php echo esc_html($group_name); ?></button><?php endforeach; ?>
+			<div class="p69-quality-picker" aria-label="<?php esc_attr_e('Available video qualities', 'pirate69'); ?>">
+				<div class="p69-quality-picker-heading"><strong><?php esc_html_e('Select video quality', 'pirate69'); ?></strong><span><?php esc_html_e('Choose a quality to see its available servers', 'pirate69'); ?></span></div>
+				<div class="p69-quality-options" role="group" aria-label="<?php esc_attr_e('Filter by quality', 'pirate69'); ?>">
+					<?php foreach ($quality_stats as $group_name => $stats) : ?>
+						<button type="button" class="p69-quality-option<?php echo $group_name === $first_quality ? ' is-active' : ''; ?>" data-p69-quality="<?php echo esc_attr($group_name); ?>" aria-pressed="<?php echo $group_name === $first_quality ? 'true' : 'false'; ?>">
+							<strong><?php echo esc_html($group_name); ?></strong>
+							<span><?php echo esc_html($stats['sizes'] ? implode(' · ', $stats['sizes']) : sprintf(_n('%s server', '%s servers', $stats['count'], 'pirate69'), number_format_i18n($stats['count']))); ?></span>
+							<small><?php echo esc_html(sprintf(_n('%s server', '%s servers', $stats['count'], 'pirate69'), number_format_i18n($stats['count']))); ?></small>
+						</button>
+					<?php endforeach; ?>
 				</div>
+			</div>
+			<div class="p69-download-filters" aria-label="<?php esc_attr_e('Filter download servers', 'pirate69'); ?>">
+				<div class="p69-server-type-filters" role="group" aria-label="<?php esc_attr_e('Server type', 'pirate69'); ?>">
+					<button type="button" class="is-active" data-p69-server-type="all" aria-pressed="true"><?php esc_html_e('All servers', 'pirate69'); ?></button>
+					<?php if (isset($server_types['instant'])) : ?><button type="button" data-p69-server-type="instant" aria-pressed="false"><?php esc_html_e('Instant', 'pirate69'); ?></button><?php endif; ?>
+					<?php if (isset($server_types['resumable'])) : ?><button type="button" data-p69-server-type="resumable" aria-pressed="false"><?php esc_html_e('Resumable', 'pirate69'); ?></button><?php endif; ?>
+					<?php if (isset($server_types['batch'])) : ?><button type="button" data-p69-server-type="batch" aria-pressed="false"><?php esc_html_e('Batch / ZIP', 'pirate69'); ?></button><?php endif; ?>
+				</div>
+				<?php if (count($audio_options) > 1) : ?><label class="p69-audio-filter"><span><?php esc_html_e('Audio', 'pirate69'); ?></span><select data-p69-audio-filter><option value="all"><?php esc_html_e('All languages', 'pirate69'); ?></option><?php foreach (array_keys($audio_options) as $audio_option) : ?><option value="<?php echo esc_attr($audio_option); ?>"><?php echo esc_html($audio_option); ?></option><?php endforeach; ?></select></label><?php endif; ?>
 			</div>
 			<div class="p69-download-groups">
 			<?php foreach ($groups as $group_name => $group_links) : ?>
-				<section class="p69-download-group" data-p69-download-group="<?php echo esc_attr($group_name); ?>">
+				<section class="p69-download-group" data-p69-download-group="<?php echo esc_attr($group_name); ?>" <?php echo $group_name !== $first_quality ? 'hidden' : ''; ?>>
 					<div class="p69-download-group-heading"><h3><?php echo esc_html($group_name); ?></h3><span><?php echo esc_html(sprintf(_n('%s server', '%s servers', count($group_links), 'pirate69'), number_format_i18n(count($group_links)))); ?></span></div>
 					<div class="p69-download-list">
 					<?php foreach ($group_links as $link) :
 						$label = $link['label'] ?: ($link['server'] ?: __('Download', 'pirate69'));
 						$server = $link['server'] ?: __('Direct link', 'pirate69');
+						$server_key = strtolower(trim((string) $server . ' ' . (string) $label));
+						$server_type = (strpos($server_key, 'resum') !== false || strpos($server_key, 'v-cloud') !== false) ? 'resumable' : ((strpos($server_key, 'batch') !== false || strpos($server_key, 'zip') !== false || strpos($server_key, 'nexdrive') !== false) ? 'batch' : 'instant');
+						$link_audio = trim((string) ($link['audio'] ?? ''));
 						?>
-						<article class="p69-download-card">
-							<div class="p69-download-server-icon" aria-hidden="true">↗</div>
-							<div class="p69-download-copy"><strong><?php echo esc_html($label); ?></strong><div class="p69-download-meta"><span class="p69-server-badge"><?php echo esc_html($server); ?></span><?php if ($link['file_size']) : ?><span><?php echo esc_html($link['file_size']); ?></span><?php endif; ?><?php if ($link['audio']) : ?><span><?php echo esc_html($link['audio']); ?></span><?php endif; ?><?php if (!empty($link['season'])) : ?><span><?php echo esc_html(sprintf(__('Season %s', 'pirate69'), number_format_i18n(absint($link['season'])))); ?></span><?php endif; ?><?php if (!empty($link['episode'])) : ?><span><?php echo esc_html(sprintf(__('Episode %s', 'pirate69'), sanitize_text_field($link['episode']))); ?></span><?php endif; ?><?php if (!empty($link['is_batch'])) : ?><span class="p69-batch-badge"><?php esc_html_e('Full season pack', 'pirate69'); ?></span><?php endif; ?></div></div>
+						<article class="p69-download-card" data-p69-server-type="<?php echo esc_attr($server_type); ?>" data-p69-audio="<?php echo esc_attr($link_audio); ?>">
+							<div class="p69-download-server-icon" aria-hidden="true"><span>↗</span></div>
+							<div class="p69-download-copy">
+								<strong><?php echo esc_html($label); ?></strong>
+								<div class="p69-download-meta">
+									<span class="p69-server-badge"><?php echo esc_html($server); ?></span>
+									<?php if ($link['file_size']) : ?><span><?php echo esc_html($link['file_size']); ?></span><?php endif; ?>
+									<?php if ($link_audio) : ?><span><?php echo esc_html($link_audio); ?></span><?php endif; ?>
+									<?php if (!empty($link['season'])) : ?><span><?php echo esc_html(sprintf(__('Season %s', 'pirate69'), number_format_i18n(absint($link['season'])))); ?></span><?php endif; ?>
+									<?php if (!empty($link['episode'])) : ?><span><?php echo esc_html(sprintf(__('Episode %s', 'pirate69'), sanitize_text_field($link['episode']))); ?></span><?php endif; ?>
+									<?php if (!empty($link['is_batch'])) : ?><span class="p69-batch-badge"><?php esc_html_e('Full season pack', 'pirate69'); ?></span><?php endif; ?>
+									<span class="p69-server-type-label"><?php echo esc_html($server_type === 'resumable' ? __('Resumable', 'pirate69') : ($server_type === 'batch' ? __('Batch / ZIP', 'pirate69') : __('Instant', 'pirate69'))); ?></span>
+								</div>
+								<form class="p69-report-link-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+									<input type="hidden" name="action" value="p69_report_download_link">
+									<input type="hidden" name="post_id" value="<?php echo esc_attr($post_id); ?>">
+									<input type="hidden" name="link_id" value="<?php echo esc_attr(absint($link['id'])); ?>">
+									<?php wp_nonce_field('p69_report_link_' . absint($link['id'])); ?>
+									<button type="submit"><?php esc_html_e('Report broken link', 'pirate69'); ?></button>
+								</form>
+							</div>
 							<a class="p69-download-button" href="<?php echo esc_url($link['url']); ?>" target="_blank" rel="nofollow sponsored noopener noreferrer"><?php esc_html_e('Download', 'pirate69'); ?> <span aria-hidden="true">↗</span></a>
 						</article>
 					<?php endforeach; ?>
 					</div>
+					<p class="p69-no-filter-results" hidden><?php esc_html_e('No servers match these filters.', 'pirate69'); ?></p>
 				</section>
 			<?php endforeach; ?>
 			</div>
